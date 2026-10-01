@@ -1,0 +1,20 @@
+{
+    "test_samples": 2261,
+    "accuracy": 0.9567,
+    "macro_precision": 0.8088,
+    "macro_recall": 0.7991,
+    "macro_f1": 0.8035,
+    "weighted_precision": 0.956,
+    "weighted_recall": 0.9567,
+    "weighted_f1": 0.9563,
+    "top5_accuracy": 0.9969,
+    "calibration": {
+        "expected_calibration_error": 0.0284,
+        "maximum_calibration_error": 0.1307
+    },
+    "real_world_exploratory_test": {
+        "images_tested": 10,
+        "correct": 8,
+        "note": "Small manually collected exploratory set; not a formal external benchmark."
+    }
+}

@@ -1,0 +1,21 @@
+INFO:     Started server process [16196]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:64691 - "POST /api/auth/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51325 - "POST /api/auth/register HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51329 - "POST /api/auth/register HTTP/1.1" 201 Created
+C:\Users\sanik\Desktop\BoviCare\backend\.venv\Lib\site-packages\jwt\api_jwt.py:149: InsecureKeyLengthWarning: The HMAC key is 26 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+INFO:     127.0.0.1:51331 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51333 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51336 - "POST /api/auth/login HTTP/1.1" 200 OK
+C:\Users\sanik\Desktop\BoviCare\backend\.venv\Lib\site-packages\jwt\api_jwt.py:370: InsecureKeyLengthWarning: The HMAC key is 26 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+INFO:     127.0.0.1:51340 - "POST /api/v1/cattle HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51342 - "POST /api/v1/cattle HTTP/1.1" 201 Created
+INFO:     127.0.0.1:51346 - "POST /api/v1/predictions/image HTTP/1.1" 401 Unauthorized
+C:\Users\sanik\Desktop\BoviCare\backend\.venv\Lib\site-packages\jwt\api_jwt.py:370: InsecureKeyLengthWarning: The HMAC key is 26 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+INFO:     127.0.0.1:51351 - "POST /api/v1/predictions/image HTTP/1.1" 403 Forbidden
+^C

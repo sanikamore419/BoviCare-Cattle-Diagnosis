@@ -1,0 +1,12 @@
+{
+    "num_classes": 7,
+    "classes": {
+        "0": "HEALTHY",
+        "1": "LSD",
+        "2": "RINGWORM",
+        "3": "FMD",
+        "4": "IBK",
+        "5": "PEDICULOSIS",
+        "6": "DERMATOPHILOSIS"
+    }
+}

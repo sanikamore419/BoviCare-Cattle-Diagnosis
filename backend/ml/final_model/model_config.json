@@ -1,0 +1,14 @@
+{
+    "model_name": "EfficientNet-B0",
+    "model_version": "bovicare-cattle-image-efficientnet-b0-v1",
+    "framework": "PyTorch",
+    "input_size": [
+        224,
+        224
+    ],
+    "num_classes": 7,
+    "dropout": 0.4,
+    "pretrained": "ImageNet",
+    "checkpoint": "bovicare_efficientnet_b0.pth",
+    "final_model_status": "FROZEN"
+}

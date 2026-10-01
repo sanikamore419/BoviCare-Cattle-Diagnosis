@@ -1,0 +1,13 @@
+{
+  "model_version": "bovicare-lumpy-skin-v1",
+  "architecture": "MobileNetV2",
+  "num_classes": 2,
+  "classes": [
+    "Lumpy Skin",
+    "Normal Skin"
+  ],
+  "img_size": 224,
+  "test_accuracy": 0.8961,
+  "test_macro_f1": 0.8775,
+  "test_roc_auc": 0.9351
+}

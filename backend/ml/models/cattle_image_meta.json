@@ -1,0 +1,13 @@
+{
+  "model_version": "bovicare-cattle-image-v1",
+  "architecture": "MobileNetV2",
+  "num_classes": 3,
+  "classes": [
+    "foot-and-mouth",
+    "healthy",
+    "lumpy"
+  ],
+  "img_size": 224,
+  "test_accuracy": 0.8583,
+  "test_macro_f1": 0.86
+}
