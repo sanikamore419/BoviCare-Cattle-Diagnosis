@@ -2,7 +2,17 @@ backend/.venv/
 backend/__pycache__/
 backend/**/*.py[cod]
 backend/.env
+.env
 backend/*.db
+backend/private_uploads/
+private_uploads/
+bovicare.db
+*.log
+**/*.log
+venv/
+**/venv/
+__pycache__/
+*.py[cod]
 frontend/node_modules/
 frontend/dist/
 .vscode/

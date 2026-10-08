@@ -6,6 +6,9 @@ export async function downloadCaseReport(caseId, language = 'en') {
   const anchor = document.createElement('a')
   anchor.href = url
   anchor.download = `bovicare-case-${caseId}.pdf`
+  anchor.style.display = 'none'
+  document.body.appendChild(anchor)
   anchor.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000)
 }

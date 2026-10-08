@@ -47,7 +47,9 @@ function predictionGroups(locationState, apiModels, language) {
 }
 
 function ResultsGroup({ group, language }) {
-  const formatProbability = probability => `${Number((probability * 100).toFixed(4)).toString()}%`
+  const formatProbability = probability => probability == null || probability === '' || !Number.isFinite(Number(probability))
+    ? '—'
+    : `${Number((probability * 100).toFixed(4)).toString()}%`
   return (
     <section className="mt-7 border-t border-slate-200 pt-6">
       <h2 className="text-lg font-bold text-slate-900">{group.title}</h2>
@@ -77,18 +79,25 @@ export default function DiagnosisResult() {
   const [loading, setLoading] = useState(!location.state?.result)
 
   useEffect(() => {
-    if (!caseId || caseId === 'image') return undefined
+    if (!caseId || caseId === 'image') {
+      if (!location.state?.result) {
+        setError('This result is no longer available. Submit the check again to create a saved case.')
+        setLoading(false)
+      }
+      return undefined
+    }
     let active = true
-    Promise.all([api.get(`/cases/${caseId}`), api.get(`/cases/${caseId}/predictions`)])
+    Promise.allSettled([api.get(`/cases/${caseId}`), api.get(`/cases/${caseId}/predictions`)])
       .then(([caseResponse, predictionResponse]) => {
         if (!active) return
-        setResult(current => ({ ...current, ...caseResponse.data }))
-        setApiModels(predictionResponse.data.models || [])
+        if (caseResponse.status === 'fulfilled') setResult(current => ({ ...(current || {}), ...caseResponse.value.data }))
+        else setError('Could not load this case. Please try again.')
+        setApiModels(predictionResponse.status === 'fulfilled' ? predictionResponse.value.data?.models || [] : [])
       })
       .catch(() => { if (active) setError('तपासणीची माहिती मिळवता आली नाही.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [caseId])
+  }, [caseId, location.state])
 
   async function download() {
     try {

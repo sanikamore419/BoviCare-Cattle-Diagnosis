@@ -4,5 +4,6 @@ from app.models.prediction import PredictionResult
 from app.models.user import User
 from app.models.case_image import CaseImage
 from app.models.notification import NotificationLog
+from app.models.refresh_session import RefreshSession
 
-__all__ = ["Cattle", "ClinicalCase", "PredictionResult", "User", "CaseImage", "NotificationLog"]
+__all__ = ["Cattle", "ClinicalCase", "PredictionResult", "User", "CaseImage", "NotificationLog", "RefreshSession"]

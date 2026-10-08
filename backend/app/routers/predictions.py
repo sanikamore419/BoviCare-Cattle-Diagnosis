@@ -49,6 +49,24 @@ def run_prediction(
             cattle_id = case.cattle_id
         case_id = case.id
 
+    if payload.image_only:
+        if case_id is None:
+            raise HTTPException(status_code=422, detail="Image-only prediction lookup requires a case_id.")
+        image_rows = db.query(PredictionResult).filter(
+            PredictionResult.case_id == case_id,
+            PredictionResult.model_name.in_(["cattle_image_classifier", "lumpy_skin_specialist"]),
+        ).all()
+        if not image_rows:
+            raise HTTPException(status_code=422, detail="Run image prediction for this case before requesting its results.")
+        case = db.get(ClinicalCase, case_id)
+        return PredictionResponse(
+            cattle_id=cattle_id,
+            models_used=sorted({row.model_name for row in image_rows}),
+            combined_risk_level=(case.risk_level if case else "low").lower(),
+            general=None,
+            mastitis=None,
+        )
+
     # -- Route to appropriate model(s) ----------------------------------------
     try:
         milk_dict = payload.milk_data.model_dump() if payload.milk_data else None

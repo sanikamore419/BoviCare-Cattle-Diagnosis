@@ -16,10 +16,14 @@ class PredictionRequest(BaseModel):
     case_id: Optional[int] = None
     symptoms: Optional[list[str]] = None
     milk_data: Optional[MilkData] = None
+    image_only: bool = False
 
     @model_validator(mode="after")
     def at_least_one_input(self):
-        if not self.symptoms and not self.milk_data:
+        if self.image_only:
+            if self.symptoms or self.milk_data or self.case_id is None:
+                raise ValueError("Image-only prediction lookup requires a case_id and no symptom or milk input.")
+        elif not self.symptoms and not self.milk_data:
             raise ValueError("Provide at least one of 'symptoms' or 'milk_data'.")
         return self
 

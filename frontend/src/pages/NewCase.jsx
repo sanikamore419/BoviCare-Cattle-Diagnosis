@@ -15,10 +15,23 @@ const groups = [
 const EMPTY_MILK = { Milk_Temperature: '', Milk_pH: '', Milk_Conductivity: '', Somatic_Cell_Count: '', Milk_Yield: '', Clotting: '' }
 function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }
 
+function requestErrorMessage(error, translate) {
+  const detail = error.response?.data?.detail
+  if (error.response?.status === 422) {
+    const reason = Array.isArray(detail)
+      ? detail.map(item => `${item.loc?.at(-1) || 'Input'}: ${item.msg}`).join(' ')
+      : typeof detail === 'string' ? detail : ''
+    return `${translate('Please check your information:', 'कृपया माहिती तपासा:')} ${reason}`.trim()
+  }
+  if (Array.isArray(detail)) return detail.map(item => `${item.loc?.at(-1) || 'Input'}: ${item.msg}`).join(' ')
+  return typeof detail === 'string' ? detail : translate('Could not save the check. Please try again.', 'तपासणी जतन करता आली नाही. कृपया पुन्हा प्रयत्न करा.')
+}
+
 export default function NewCase() {
   const navigate = useNavigate()
   const { language, translate } = useLanguage()
   const inputRef = useRef(null)
+  const submitLock = useRef(false)
   const [form, setForm] = useState({ cattle_tag: '', cattle_name: '', breed: '', gender: '', age_years: '', temperature_c: '', notes: '' })
   const [symptoms, setSymptoms] = useState([])
   const [imageFile, setImageFile] = useState(null)
@@ -58,7 +71,9 @@ export default function NewCase() {
 
   function buildMilkData() {
     const v = milkForm
-    if (!v.Milk_Temperature && !v.Milk_pH && !v.Milk_Conductivity && !v.Somatic_Cell_Count && !v.Milk_Yield && v.Clotting === '') return null
+    const filledFields = Object.values(v).filter(value => value !== '').length
+    if (filledFields === 0) return null
+    if (filledFields !== Object.keys(EMPTY_MILK).length) throw new Error('Complete all six milk fields or leave the milk section empty.')
     return {
       Milk_Temperature: Number(v.Milk_Temperature),
       Milk_pH: Number(v.Milk_pH),
@@ -70,9 +85,16 @@ export default function NewCase() {
   }
 
   async function submit(e) {
-    e.preventDefault(); setError('')
-    const milkData = buildMilkData()
+    e.preventDefault()
+    if (submitLock.current) return
+    setError('')
+    let milkData
+    try { milkData = buildMilkData() } catch (validationError) {
+      setError(translate(validationError.message, 'दुधाची सर्व सहा माहिती भरा किंवा दूध विभाग रिकामा ठेवा.'))
+      return
+    }
     if (!symptoms.length && !imageFile && !milkData) { setError(translate('Select a symptom, enter milk information, or add a cattle photo.', 'किमान एक लक्षण निवडा, दुधाची माहिती भरा किंवा जनावराचा फोटो जोडा.')); return }
+    submitLock.current = true
     setLoading(true)
     try {
       // Step 1: triage — only if symptoms selected
@@ -124,6 +146,16 @@ export default function NewCase() {
         imageResult = r.data
       }
 
+      // Image inference persists its own rows. Verify those stored rows through
+      // the predictions resource so image-only submissions use the same flow.
+      if (!symptoms.length && !milkData && imageFile) {
+        await api.post('/predictions', {
+          case_id: triageResult.id,
+          cattle_id: selectedCattleId ? Number(selectedCattleId) : null,
+          image_only: true,
+        })
+      }
+
       navigate(`/diagnosis/${triageResult.id}`, {
         state: {
           result: triageResult,
@@ -134,8 +166,8 @@ export default function NewCase() {
         }
       })
     } catch (err) {
-      setError(err.response?.data?.detail || translate('Could not save the check. Please try again.', 'तपासणी नोंदवता आली नाही. कृपया पुन्हा प्रयत्न करा.'))
-    } finally { setLoading(false) }
+      setError(requestErrorMessage(err, translate))
+    } finally { setLoading(false); submitLock.current = false }
   }
 
   return (

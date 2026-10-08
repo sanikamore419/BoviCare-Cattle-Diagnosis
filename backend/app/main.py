@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import hash_password
 from app.database.session import Base, SessionLocal, engine
-from app.models import CaseImage, Cattle, ClinicalCase, NotificationLog, PredictionResult, User  # noqa: F401
+from app.models import CaseImage, Cattle, ClinicalCase, NotificationLog, PredictionResult, RefreshSession, User  # noqa: F401
 from app.routers import auth, cases, cattle, health, predictions
 
 settings = get_settings()

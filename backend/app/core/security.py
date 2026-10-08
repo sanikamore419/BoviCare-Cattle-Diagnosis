@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
+import secrets
 import jwt
 from fastapi import HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -24,6 +26,14 @@ def create_access_token(subject: str) -> str:
     settings = get_settings()
     expiry = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     return jwt.encode({"sub": subject, "exp": expiry}, settings.secret_key, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 bearer_scheme = HTTPBearer(auto_error=False)
