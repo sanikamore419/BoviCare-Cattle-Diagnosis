@@ -1,10 +1,11 @@
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, ShieldCheck, Stethoscope, X } from 'lucide-react'
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useLanguage } from '../auth/LanguageContext'
 import { homeForRole, localizedLabel, NAV_BY_ROLE, normalizeRole, ROLE, ROUTES } from '../config/routes'
 import { api } from '../lib/api'
+import BrandMark from './BrandMark'
 import LanguageToggle from './LanguageToggle'
 
 const COLLAPSED_KEY = 'bovicare_sidebar_collapsed'
@@ -17,7 +18,7 @@ const ROLE_LABEL = {
 
 function Brand({ compact = false, to }) {
   return <Link to={to} aria-label="BoviCare AI" className={`flex shrink-0 items-center gap-2 text-lg font-bold text-white ${compact ? 'justify-center' : ''}`}>
-    <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-400 text-emerald-950"><Stethoscope size={20} strokeWidth={1.75} /></span>
+    <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-[#166534]"><BrandMark size={27} /></span>
     {!compact && <span>BoviCare AI</span>}
   </Link>
 }

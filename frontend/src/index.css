@@ -2,18 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face { font-family: Inter; src: url('/fonts/inter-400-latin.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: Inter; src: url('/fonts/inter-500-latin.woff2') format('woff2'); font-style: normal; font-weight: 500; font-display: swap; }
+@font-face { font-family: Inter; src: url('/fonts/inter-600-latin.woff2') format('woff2'); font-style: normal; font-weight: 600; font-display: swap; }
+@font-face { font-family: Inter; src: url('/fonts/inter-700-latin.woff2') format('woff2'); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/plus-jakarta-sans-400-latin.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/plus-jakarta-sans-500-latin.woff2') format('woff2'); font-style: normal; font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/plus-jakarta-sans-600-latin.woff2') format('woff2'); font-style: normal; font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Plus Jakarta Sans'; src: url('/fonts/plus-jakarta-sans-700-latin.woff2') format('woff2'); font-style: normal; font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Noto Sans Devanagari'; src: url('/fonts/noto-sans-devanagari-400-devanagari.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Noto Sans Devanagari'; src: url('/fonts/noto-sans-devanagari-500-devanagari.woff2') format('woff2'); font-style: normal; font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Noto Sans Devanagari'; src: url('/fonts/noto-sans-devanagari-600-devanagari.woff2') format('woff2'); font-style: normal; font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Noto Sans Devanagari'; src: url('/fonts/noto-sans-devanagari-700-devanagari.woff2') format('woff2'); font-style: normal; font-weight: 700; font-display: swap; }
+
+:root {
+  --color-primary: #166534;
+  --color-primary-hover: #14532D;
+  --color-primary-soft: #F0FDF4;
+  --color-accent: #CA8A04;
+  --color-accent-text: #A16207;
+  --color-background: #F7F5EF;
+  --color-text: #0F172A;
+  --color-muted: #475569;
+  --color-border: #E7E5E4;
+}
+
 @layer base {
-  body { @apply bg-[#f7faf7] font-sans text-slate-900 antialiased; }
+  html { background: var(--color-background); }
+  body { @apply antialiased; min-height: 100vh; background: var(--color-background); color: var(--color-text); font-family: Inter, 'Noto Sans Devanagari', sans-serif; }
+  h1, h2, h3, h4 { font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', Inter, sans-serif; }
+  :lang(hi), :lang(mr) { font-family: 'Noto Sans Devanagari', Inter, sans-serif; }
   button, input, textarea, select { font: inherit; }
-  ::selection { @apply bg-emerald-200 text-emerald-950; }
+  button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: #DCFCE7; color: #14532D; }
+  :focus-visible { outline: 3px solid #166534; outline-offset: 2px; }
 }
 
 @layer components {
   .page-shell { @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8; }
-  .surface { @apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgb(15,23,42,0.04)]; }
-  .button-primary { @apply inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50; }
-  .button-secondary { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 focus:outline-none focus:ring-4 focus:ring-emerald-100; }
-  .input { @apply mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50; }
+  .surface { @apply rounded-2xl border bg-white shadow-[0_8px_30px_rgb(15,23,42,0.04)]; border-color: var(--color-border); }
+  .button-primary { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50; background: var(--color-primary); }
+  .button-primary:hover { background: var(--color-primary-hover); }
+  .button-primary:focus-visible, .button-secondary:focus-visible { @apply ring-4 ring-emerald-100; }
+  .button-secondary { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50; border-color: var(--color-border); }
+  .input { @apply mt-1.5 min-h-11 w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:ring-4 focus:ring-emerald-50; border-color: var(--color-border); }
+  .input:focus { border-color: var(--color-primary); }
   .label { @apply text-sm font-semibold text-slate-700; }
-  .eyebrow { @apply text-xs font-bold uppercase tracking-[0.16em] text-emerald-700; }
+  .eyebrow { @apply text-xs font-bold uppercase tracking-[0.16em]; color: var(--color-primary); }
+  .text-accent { color: var(--color-accent-text); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

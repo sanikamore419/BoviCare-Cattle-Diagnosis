@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
-const LanguageContext = createContext(null)
+export const LanguageContext = createContext(null)
 const SUPPORTED_LANGUAGES = Object.freeze(['en', 'hi', 'mr'])
 
 function storedLanguage() {
@@ -14,6 +14,7 @@ function storedLanguage() {
 
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(storedLanguage)
+  useEffect(() => { document.documentElement.lang = language }, [language])
   function setLanguage(nextLanguage) {
     const next = SUPPORTED_LANGUAGES.includes(nextLanguage) ? nextLanguage : 'en'
     setLanguageState(next)
