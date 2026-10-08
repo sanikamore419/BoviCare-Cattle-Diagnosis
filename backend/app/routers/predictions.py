@@ -112,6 +112,10 @@ def run_prediction(
     db.commit()
     if case_id is not None:
         case = db.get(ClinicalCase, case_id)
+        if case is not None:
+            from app.routers.cases import calculate_case_urgency
+            prediction_rows = db.query(PredictionResult).filter(PredictionResult.case_id == case_id).all()
+            calculate_case_urgency(case, prediction_rows)
         if case and case.status == CaseStatus.SUBMITTED.value:
             record_status_transition(db, case, CaseStatus.AI_COMPLETE.value, current_user.id, event="ai_completed")
         if case and case.status == CaseStatus.AI_COMPLETE.value:
@@ -248,6 +252,10 @@ async def run_image_prediction(
         raise
     if resolved_case_id is not None:
         case = db.get(ClinicalCase, resolved_case_id)
+        if case is not None:
+            from app.routers.cases import calculate_case_urgency
+            prediction_rows = db.query(PredictionResult).filter(PredictionResult.case_id == resolved_case_id).all()
+            calculate_case_urgency(case, prediction_rows)
         if case and case.status == CaseStatus.SUBMITTED.value:
             record_status_transition(db, case, CaseStatus.AI_COMPLETE.value, current_user.id, event="ai_completed")
         if case and case.status == CaseStatus.AI_COMPLETE.value:

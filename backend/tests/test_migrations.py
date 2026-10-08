@@ -21,6 +21,7 @@ class MigrationTests(unittest.TestCase):
         handle, self.db_path = tempfile.mkstemp(suffix=".db")
         os.close(handle)
         self.config = Config(str(ALEMBIC_INI))
+        self.config.set_main_option("script_location", str(BACKEND_DIR / "app" / "migrations"))
         self.database_url = f"sqlite:///{self.db_path}"
         self.engines = []
 

@@ -24,26 +24,6 @@ app.include_router(cattle.router, prefix="/api/v1")
 app.include_router(predictions.router, prefix="/api/v1")
 
 
-def ensure_demo_veterinarians() -> None:
-    if settings.environment.lower() != "development":
-        return
-    db: Session = SessionLocal()
-    try:
-        current = db.query(User).filter(User.role == "doctor").count()
-        if current > 0:
-            return
-        demo_users = [
-            ("Demo Veterinarian 1", "demo_vet_1@example.com", "DemoVet123"),
-            ("Demo Veterinarian 2", "demo_vet_2@example.com", "DemoVet123"),
-        ]
-        for name, email, password in demo_users:
-            if not db.query(User).filter(User.email == email.lower()).first():
-                db.add(User(full_name=name, email=email.lower(), password_hash=hash_password(password), role="doctor", verification_status="approved", availability="offline"))
-        db.commit()
-    finally:
-        db.close()
-
-
 def ensure_admin_account() -> None:
     db: Session = SessionLocal()
     try:
@@ -65,7 +45,9 @@ def ensure_admin_account() -> None:
 
 
 def verify_schema_revision() -> None:
-    migration_config = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    backend_dir = Path(__file__).resolve().parent.parent
+    migration_config = Config(str(backend_dir / "alembic.ini"))
+    migration_config.set_main_option("script_location", str(backend_dir / "app" / "migrations"))
     head_revision = ScriptDirectory.from_config(migration_config).get_current_head()
     with engine.connect() as connection:
         current_revision = MigrationContext.configure(connection).get_current_revision()
@@ -77,5 +59,4 @@ def verify_schema_revision() -> None:
 def startup_checks() -> None:
     settings.validate_runtime_security()
     verify_schema_revision()
-    ensure_demo_veterinarians()
     ensure_admin_account()

@@ -14,7 +14,7 @@ import Landing from './pages/Landing'
 import NewCase from './pages/NewCase'
 import NotFound from './pages/NotFound'
 import VeterinaryCaseDetails from './pages/VeterinaryCaseDetails'
-import VeterinaryDashboard from './pages/VeterinaryDashboard'
+import { AnalyticsPage, CaseQueuePage, HighRiskAlertsPage, KnowledgeBasePage, MyCasesPage, ProfilePage, ReviewedHistoryPage } from './pages/DoctorWorkspace'
 import WorkspacePlaceholder from './pages/WorkspacePlaceholder'
 import { homeForRole, ROLE, ROUTES, safeReturnTo } from './config/routes'
 
@@ -65,16 +65,18 @@ export default function App() {
         <Route path={ROUTES.farmerCases} element={<ProtectedPage roles={[ROLE.FARMER]}><Placeholder title="My cases" description="Your diagnosis history and veterinary advice" /></ProtectedPage>} />
         <Route path={ROUTES.vetDirectory} element={<ProtectedPage roles={[ROLE.FARMER]}><Placeholder title="Vet directory" description="Find veterinary support" /></ProtectedPage>} />
         <Route path={ROUTES.notifications} element={<ProtectedPage roles={[ROLE.FARMER]}><Placeholder title="Notifications" description="Updates about your cases" /></ProtectedPage>} />
-        <Route path={ROUTES.doctorHome} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryDashboard /></ProtectedPage>} />
-        <Route path={ROUTES.queue} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryDashboard /></ProtectedPage>} />
+        <Route path={ROUTES.doctorHome} element={<ProtectedPage roles={[ROLE.DOCTOR]}><CaseQueuePage /></ProtectedPage>} />
+        <Route path={ROUTES.queue} element={<ProtectedPage roles={[ROLE.DOCTOR]}><CaseQueuePage /></ProtectedPage>} />
+        <Route path={ROUTES.cases} element={<ProtectedPage roles={[ROLE.DOCTOR]}><CaseQueuePage /></ProtectedPage>} />
         <Route path={ROUTES.caseReview} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryCaseDetails /></ProtectedPage>} />
+        <Route path={ROUTES.caseDetails} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryCaseDetails /></ProtectedPage>} />
         <Route path={ROUTES.verificationPending} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Verification pending" description="Your veterinary profile is waiting for administrator approval." actionTo={ROUTES.doctorHome} actionLabel="Refresh dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.highRisk} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="High-risk alerts" description="Cases needing prompt veterinary review" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.doctorCases} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="My cases" description="Cases assigned to your account" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.reviewed} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Reviewed history" description="Previously reviewed cases" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.analytics} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Analytics" description="Clinical workload and case trends" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.knowledge} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Knowledge base" description="Veterinary disease reference" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.profile} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Profile" description="Your veterinary account" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
+        <Route path={ROUTES.highRisk} element={<ProtectedPage roles={[ROLE.DOCTOR]}><HighRiskAlertsPage /></ProtectedPage>} />
+        <Route path={ROUTES.doctorCases} element={<ProtectedPage roles={[ROLE.DOCTOR]}><MyCasesPage /></ProtectedPage>} />
+        <Route path={ROUTES.reviewed} element={<ProtectedPage roles={[ROLE.DOCTOR]}><ReviewedHistoryPage /></ProtectedPage>} />
+        <Route path={ROUTES.analytics} element={<ProtectedPage roles={[ROLE.DOCTOR]}><AnalyticsPage /></ProtectedPage>} />
+        <Route path={ROUTES.knowledge} element={<ProtectedPage roles={[ROLE.DOCTOR]}><KnowledgeBasePage /></ProtectedPage>} />
+        <Route path={ROUTES.profile} element={<ProtectedPage roles={[ROLE.DOCTOR]}><ProfilePage /></ProtectedPage>} />
         <Route path={ROUTES.adminApprovals} element={<ProtectedPage roles={[ROLE.ADMIN]}><Placeholder title="Doctor approvals" description="Review veterinary registration requests." actionTo={ROUTES.adminHome} actionLabel="Open overview" /></ProtectedPage>} />
         <Route path={ROUTES.adminHome} element={<ProtectedPage roles={[ROLE.ADMIN]}><Placeholder title="Overview" description="Administrative workspace" actionTo={ROUTES.adminApprovals} actionLabel="Doctor approvals" /></ProtectedPage>} />
         <Route path="*" element={<NotFound />} />

@@ -19,6 +19,7 @@ from app.services.prediction import prediction_service
 from app.services.reports import build_case_report
 from app.services.image_storage import image_path
 from app.services.notifications import create_case_status_notification, create_high_risk_notification, get_case_workflow_status
+from app.services.urgency import calculate_urgency
 
 router = APIRouter(prefix="/cases", tags=["clinical cases"])
 
@@ -30,8 +31,9 @@ def serialize(case: ClinicalCase, current_user: User | None = None) -> dict:
     data["urgency_level"] = (data.get("urgency_level") or "LOW").upper()
     data["workflow_status"] = get_case_workflow_status(case)
     if current_user and current_user.role == "farmer":
-        data["private_clinical_notes"] = None
         data.pop("clinical_notes", None)
+        data.pop("private_clinical_notes", None)
+        data.pop("veterinarian_notes", None)
     data["farmer_advice"] = data.get("farmer_advice") or data.get("veterinarian_notes")
     return data
 
@@ -53,47 +55,26 @@ def ensure_case_access(case: ClinicalCase, user: User) -> None:
 
 
 def calculate_case_urgency(case: ClinicalCase, prediction_rows: list | None = None) -> float:
-    """Urgency formula: disease severity 30 + AI confidence 25 + symptom count 20 + waiting time 15 + age risk 10 = 100.
-    The disease severity value is mapped from the existing risk_level semantics already used by the app:
-    high => 30, medium => 15, low => 5. When a model prediction is present, confidence contributes up to 25 points.
-    If no model result exists, the score falls back to zero for confidence rather than inventing a value.
-    """
     symptoms = json.loads(case.symptoms or "[]") if case.symptoms else []
-    disease_severity = {"high": 30, "medium": 15, "low": 5, "urgent": 30}.get((case.risk_level or "").lower(), 0)
-    if disease_severity == 0:
-        ai_text = (case.ai_prediction or "").lower()
-        if any(token in ai_text for token in ["urgent", "critical", "emergency"]):
-            disease_severity = 30
-        elif any(token in ai_text for token in ["moderate", "recommended"]):
-            disease_severity = 15
-
-    highest_confidence = 0.0
-    if prediction_rows:
-        highest_confidence = max((float(row.probability) for row in prediction_rows if row.probability is not None), default=0.0)
-    elif case.risk_level:
-        highest_confidence = {"high": 0.85, "medium": 0.65, "low": 0.35}.get(case.risk_level.lower(), 0.0)
-
-    ai_confidence_points = min(25.0, highest_confidence * 25.0)
-    symptom_points = min(20, len(symptoms) * 4)
-
     waiting_hours = 0.0
     if case.created_at is not None:
         waiting_hours = max((datetime.utcnow() - case.created_at).total_seconds() / 3600, 0.0)
-    waiting_time_points = min(15.0, (waiting_hours / 24.0) * 15.0)
 
-    animal_age = case.age_years
-    age_risk_points = 0.0
-    if animal_age is not None:
-        if animal_age >= 8:
-            age_risk_points = 10.0
-        elif animal_age >= 5:
-            age_risk_points = 6.0
-        elif animal_age >= 3:
-            age_risk_points = 3.0
-
-    score = min(100.0, disease_severity + ai_confidence_points + symptom_points + waiting_time_points + age_risk_points)
-    case.urgency_score = round(score, 2)
-    case.urgency_level = "HIGH" if score >= 70 else "MEDIUM" if score >= 40 else "LOW"
+    rows = prediction_rows or []
+    findings = [row.disease_label for row in rows]
+    findings.extend(row.risk_level for row in rows)
+    if not findings:
+        findings.append(case.risk_level)
+    scored = calculate_urgency(
+        findings=findings,
+        confidence_scores=[row.probability for row in rows],
+        symptom_count=len(symptoms),
+        waiting_hours=waiting_hours,
+        animal_age_years=case.age_years,
+    )
+    case.urgency_score = scored["score"]
+    case.urgency_level = scored["level"]
+    case.urgency_breakdown = scored["breakdown"]
     return float(case.urgency_score)
 
 
@@ -167,7 +148,7 @@ def create_triage(payload: CaseCreate, db: Session = Depends(get_db), current_us
     return serialize(case, current_user)
 
 
-@router.get("", response_model=list[CaseRead])
+@router.get("")
 def list_cases(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     query = db.query(ClinicalCase)
     if current_user.role == "farmer":
@@ -185,7 +166,7 @@ def list_cases(db: Session = Depends(get_db), current_user: User = Depends(get_c
     return [serialize(case, current_user) for case in cases]
 
 
-@router.get("/{case_id}", response_model=CaseRead)
+@router.get("/{case_id}")
 def get_case(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     case = get_case_or_404(case_id, db)
     ensure_case_access(case, current_user)

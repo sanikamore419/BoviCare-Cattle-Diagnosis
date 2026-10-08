@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint src --ext .js,.jsx",
+    "test": "node --test src/config/imageClasses.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

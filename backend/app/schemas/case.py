@@ -28,7 +28,6 @@ class CaseRead(BaseModel):
     urgency_level: str | None = None
     veterinarian_id: int | None = None
     veterinarian_notes: str | None = None
-    private_clinical_notes: str | None = None
     farmer_advice: str | None = None
     created_at: datetime
     model_config = {"from_attributes": True}

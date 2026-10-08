@@ -52,12 +52,12 @@ class WorkflowTests(unittest.TestCase):
         case = ClinicalCase(
             owner_id=1,
             cattle_tag="COW-1",
-            symptoms='["difficulty breathing", "fever", "decreased appetite"]',
+            symptoms='["difficulty breathing", "fever", "decreased appetite", "lethargy", "weight loss"]',
             ai_prediction="Urgent clinical review needed",
             risk_level="high",
-            age_years=7,
+            age_years=8,
             temperature_c=40.8,
-            created_at=datetime.utcnow() - timedelta(hours=2),
+            created_at=datetime.utcnow() - timedelta(hours=13),
         )
         score = calculate_case_urgency(case)
         self.assertGreaterEqual(score, 0)
