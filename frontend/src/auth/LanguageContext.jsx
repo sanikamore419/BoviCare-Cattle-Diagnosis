@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useState } from 'react'
 
 const LanguageContext = createContext(null)
+const SUPPORTED_LANGUAGES = Object.freeze(['en', 'hi', 'mr'])
 
 function storedLanguage() {
   try {
-    return localStorage.getItem('bovicare_language') === 'mr' ? 'mr' : 'en'
+    const stored = localStorage.getItem('bovicare_language')
+    return SUPPORTED_LANGUAGES.includes(stored) ? stored : 'en'
   } catch {
     return 'en'
   }
@@ -13,12 +15,16 @@ function storedLanguage() {
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(storedLanguage)
   function setLanguage(nextLanguage) {
-    const next = nextLanguage === 'mr' ? 'mr' : 'en'
+    const next = SUPPORTED_LANGUAGES.includes(nextLanguage) ? nextLanguage : 'en'
     setLanguageState(next)
     try { localStorage.setItem('bovicare_language', next) } catch { /* Preference storage is optional. */ }
   }
-  const translate = useCallback((english, marathi) => language === 'mr' ? marathi : english, [language])
-  return <LanguageContext.Provider value={{ language, setLanguage, translate }}>{children}</LanguageContext.Provider>
+  const translate = useCallback((english, hindiOrMarathi, marathi) => {
+    if (language === 'hi') return marathi === undefined ? english : hindiOrMarathi
+    if (language === 'mr') return marathi === undefined ? hindiOrMarathi : marathi
+    return english
+  }, [language])
+  return <LanguageContext.Provider value={{ language, setLanguage, translate, supportedLanguages: SUPPORTED_LANGUAGES }}>{children}</LanguageContext.Provider>
 }
 
 export function useLanguage() {

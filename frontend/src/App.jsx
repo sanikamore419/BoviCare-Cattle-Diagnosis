@@ -15,7 +15,7 @@ import NotFound from './pages/NotFound'
 import VeterinaryCaseDetails from './pages/VeterinaryCaseDetails'
 import VeterinaryDashboard from './pages/VeterinaryDashboard'
 import WorkspacePlaceholder from './pages/WorkspacePlaceholder'
-import { homeForRole, ROLE, ROUTES } from './config/routes'
+import { homeForRole, ROLE, ROUTES, safeReturnTo } from './config/routes'
 
 function SessionExpiredRedirect() {
   const navigate = useNavigate()
@@ -24,7 +24,7 @@ function SessionExpiredRedirect() {
 
   useEffect(() => {
     const onExpired = () => {
-      const returnTo = `${location.pathname}${location.search}${location.hash}`
+      const returnTo = safeReturnTo(`${location.pathname}${location.search}${location.hash}`)
       setShowToast(true)
       navigate(ROUTES.login, { replace: true, state: { sessionExpired: true, returnTo } })
       window.setTimeout(() => setShowToast(false), 5000)
@@ -66,13 +66,15 @@ export default function App() {
         <Route path={ROUTES.doctorHome} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryDashboard /></ProtectedPage>} />
         <Route path={ROUTES.queue} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryDashboard /></ProtectedPage>} />
         <Route path={ROUTES.caseReview} element={<ProtectedPage roles={[ROLE.DOCTOR]}><VeterinaryCaseDetails /></ProtectedPage>} />
+        <Route path={ROUTES.verificationPending} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Verification pending" description="Your veterinary profile is waiting for administrator approval." actionTo={ROUTES.doctorHome} actionLabel="Refresh dashboard" /></ProtectedPage>} />
         <Route path={ROUTES.highRisk} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="High-risk alerts" description="Cases needing prompt veterinary review" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
         <Route path={ROUTES.doctorCases} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="My cases" description="Cases assigned to your account" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
         <Route path={ROUTES.reviewed} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Reviewed history" description="Previously reviewed cases" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
         <Route path={ROUTES.analytics} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Analytics" description="Clinical workload and case trends" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
         <Route path={ROUTES.knowledge} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Knowledge base" description="Veterinary disease reference" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
         <Route path={ROUTES.profile} element={<ProtectedPage roles={[ROLE.DOCTOR]}><Placeholder title="Profile" description="Your veterinary account" actionTo={ROUTES.doctorHome} actionLabel="Open doctor dashboard" /></ProtectedPage>} />
-        <Route path={ROUTES.adminHome} element={<ProtectedPage roles={[ROLE.ADMIN]}><Placeholder title="Administration" description="Administrative workspace" actionTo={ROUTES.adminHome} actionLabel="Administration" /></ProtectedPage>} />
+        <Route path={ROUTES.adminApprovals} element={<ProtectedPage roles={[ROLE.ADMIN]}><Placeholder title="Doctor approvals" description="Review veterinary registration requests." actionTo={ROUTES.adminHome} actionLabel="Open overview" /></ProtectedPage>} />
+        <Route path={ROUTES.adminHome} element={<ProtectedPage roles={[ROLE.ADMIN]}><Placeholder title="Overview" description="Administrative workspace" actionTo={ROUTES.adminApprovals} actionLabel="Doctor approvals" /></ProtectedPage>} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </ErrorBoundary>
