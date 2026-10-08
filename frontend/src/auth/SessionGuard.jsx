@@ -58,11 +58,11 @@ export default function SessionGuard() {
   return <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/50 p-4" role="presentation">
     <section role="alertdialog" aria-modal="true" aria-labelledby="idle-title" className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-6 shadow-2xl">
       <ShieldCheck className="text-emerald-800" size={24} />
-      <h2 id="idle-title" className="mt-4 text-xl font-bold text-slate-900">{translate('Are you still there?', 'तुम्ही अजून येथे आहात का?')}</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{translate(`You will be signed out in ${seconds} seconds to protect your account.`, `तुमचे खाते सुरक्षित ठेवण्यासाठी ${seconds} सेकंदांत तुम्हाला साइन आउट केले जाईल.`)}</p>
+      <h2 id="idle-title" className="mt-4 text-xl font-bold text-slate-900">{translate('Are you still there?', 'क्या आप अभी भी यहाँ हैं?', 'तुम्ही अजून येथे आहात का?')}</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{translate(`You will be signed out in ${seconds} seconds to protect your account.`, `आपके खाते की सुरक्षा के लिए ${seconds} सेकंड में आपको साइन आउट कर दिया जाएगा।`, `तुमचे खाते सुरक्षित ठेवण्यासाठी ${seconds} सेकंदांत तुम्हाला साइन आउट केले जाईल.`)}</p>
       <div className="mt-5 flex flex-wrap justify-end gap-3">
-        <button className="button-secondary" onClick={logout}><LogOut size={16} />{translate('Log out', 'बाहेर पडा')}</button>
-        <button className="button-primary" onClick={staySignedIn}>{translate('Stay signed in', 'साइन इन राहा')}</button>
+        <button className="button-secondary" onClick={logout}><LogOut size={16} />{translate('Log out', 'साइन आउट करें', 'बाहेर पडा')}</button>
+        <button className="button-primary" onClick={staySignedIn}>{translate('Stay signed in', 'साइन इन रहें', 'साइन इन राहा')}</button>
       </div>
     </section>
   </div>

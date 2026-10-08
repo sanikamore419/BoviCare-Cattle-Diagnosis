@@ -14,6 +14,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('bovicare_last_activity')
     if (clearDrafts) sessionStorage.removeItem('bovicare_new_case_draft')
     if ('caches' in window) window.caches.keys().then(keys => keys.forEach(key => window.caches.delete(key))).catch(() => { /* Cache storage is optional. */ })
+    window.dispatchEvent(new Event('bovicare:clear-memory'))
     setUser(null)
   }
 
@@ -44,7 +45,7 @@ export function AuthProvider({ children }) {
     const onExpired = () => clearSession({ clearDrafts: false })
     const onStorage = event => {
       if (event.key === 'bovicare_user') setUser(storageUser())
-      if (event.key === 'bovicare_token' && event.newValue === null) setUser(null)
+      if (event.key === 'bovicare_token' && event.newValue === null) clearSession({ clearDrafts: false })
       if (event.key === 'bovicare_logout' && event.newValue) clearSession()
     }
     window.addEventListener('bovicare:auth-expired', onExpired)

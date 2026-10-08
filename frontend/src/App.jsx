@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './auth/AuthContext'
+import { useLanguage } from './auth/LanguageContext'
 import ProtectedRoute from './auth/ProtectedRoute'
 import SessionGuard from './auth/SessionGuard'
 import AppShell from './components/AppShell'
@@ -20,6 +21,7 @@ import { homeForRole, ROLE, ROUTES, safeReturnTo } from './config/routes'
 function SessionExpiredRedirect() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { translate } = useLanguage()
   const [showToast, setShowToast] = useState(false)
 
   useEffect(() => {
@@ -33,7 +35,7 @@ function SessionExpiredRedirect() {
     return () => window.removeEventListener('bovicare:auth-expired', onExpired)
   }, [location.pathname, location.search, location.hash, navigate])
 
-  return showToast ? <div role="status" className="fixed right-4 top-4 z-[110] flex items-center gap-3 rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-xl"><span className="h-2.5 w-2.5 rounded-full bg-amber-600" />Session expired. Sign in again to continue.</div> : null
+  return showToast ? <div role="status" className="fixed right-4 top-4 z-[110] flex items-center gap-3 rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-xl"><span className="h-2.5 w-2.5 rounded-full bg-amber-600" />{translate('Session expired. Sign in again to continue.', 'आपका सत्र समाप्त हो गया। जारी रखने के लिए फिर से साइन इन करें।', 'सत्र संपले. पुढे जाण्यासाठी पुन्हा साइन इन करा.')}</div> : null
 }
 
 function ProtectedPage({ roles, children }) {
