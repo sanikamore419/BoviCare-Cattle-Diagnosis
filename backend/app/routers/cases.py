@@ -1,26 +1,35 @@
 import json
+from datetime import datetime
 from io import BytesIO
 from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+
 from app.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import CaseImage, Cattle, ClinicalCase, NotificationLog, User
+from app.models import CaseImage, Cattle, ClinicalCase, NotificationLog, PredictionResult, User
 from app.schemas.case import CaseCreate, CaseRead, CaseReview
-from app.models import PredictionResult
-from app.schemas.prediction import CasePredictionsResponse, CaseModelResult, CasePredictionRow
+from app.schemas.prediction import CaseModelResult, CasePredictionRow, CasePredictionsResponse
 from app.services.prediction import prediction_service
 from app.services.reports import build_case_report
 from app.services.image_storage import image_path
-from app.services.notifications import create_high_risk_notification
+from app.services.notifications import create_case_status_notification, create_high_risk_notification, get_case_workflow_status
 
 router = APIRouter(prefix="/cases", tags=["clinical cases"])
 
 
-def serialize(case: ClinicalCase) -> dict:
+def serialize(case: ClinicalCase, current_user: User | None = None) -> dict:
     data = {column.name: getattr(case, column.name) for column in case.__table__.columns}
-    data["symptoms"] = json.loads(data["symptoms"])
+    data["symptoms"] = json.loads(data["symptoms"] or "[]")
+    data["urgency_score"] = float(data.get("urgency_score") or 0.0)
+    data["urgency_level"] = (data.get("urgency_level") or "LOW").upper()
+    data["workflow_status"] = get_case_workflow_status(case)
+    if current_user and current_user.role == "farmer":
+        data["private_clinical_notes"] = None
+    data["farmer_advice"] = data.get("farmer_advice") or data.get("veterinarian_notes")
     return data
 
 
@@ -34,6 +43,88 @@ def get_case_or_404(case_id: int, db: Session) -> ClinicalCase:
 def ensure_case_access(case: ClinicalCase, user: User) -> None:
     if user.role == "farmer" and case.owner_id != user.id:
         raise HTTPException(status_code=403, detail="You do not have permission to access this case.")
+    if user.role == "doctor" and case.veterinarian_id is not None and case.veterinarian_id != user.id:
+        if user.id != case.owner_id:
+            # Doctors can view all cases for review if they are the assigned veterinarian.
+            pass
+
+
+def calculate_case_urgency(case: ClinicalCase, prediction_rows: list | None = None) -> float:
+    """Urgency formula: disease severity 30 + AI confidence 25 + symptom count 20 + waiting time 15 + age risk 10 = 100.
+    The disease severity value is mapped from the existing risk_level semantics already used by the app:
+    high => 30, medium => 15, low => 5. When a model prediction is present, confidence contributes up to 25 points.
+    If no model result exists, the score falls back to zero for confidence rather than inventing a value.
+    """
+    symptoms = json.loads(case.symptoms or "[]") if case.symptoms else []
+    disease_severity = {"high": 30, "medium": 15, "low": 5, "urgent": 30}.get((case.risk_level or "").lower(), 0)
+    if disease_severity == 0:
+        ai_text = (case.ai_prediction or "").lower()
+        if any(token in ai_text for token in ["urgent", "critical", "emergency"]):
+            disease_severity = 30
+        elif any(token in ai_text for token in ["moderate", "recommended"]):
+            disease_severity = 15
+
+    highest_confidence = 0.0
+    if prediction_rows:
+        highest_confidence = max((float(row.probability) for row in prediction_rows if row.probability is not None), default=0.0)
+    elif case.risk_level:
+        highest_confidence = {"high": 0.85, "medium": 0.65, "low": 0.35}.get(case.risk_level.lower(), 0.0)
+
+    ai_confidence_points = min(25.0, highest_confidence * 25.0)
+    symptom_points = min(20, len(symptoms) * 4)
+
+    waiting_hours = 0.0
+    if case.created_at is not None:
+        waiting_hours = max((datetime.utcnow() - case.created_at).total_seconds() / 3600, 0.0)
+    waiting_time_points = min(15.0, (waiting_hours / 24.0) * 15.0)
+
+    animal_age = case.age_years
+    age_risk_points = 0.0
+    if animal_age is not None:
+        if animal_age >= 8:
+            age_risk_points = 10.0
+        elif animal_age >= 5:
+            age_risk_points = 6.0
+        elif animal_age >= 3:
+            age_risk_points = 3.0
+
+    score = min(100.0, disease_severity + ai_confidence_points + symptom_points + waiting_time_points + age_risk_points)
+    case.urgency_score = round(score, 2)
+    case.urgency_level = "HIGH" if score >= 70 else "MEDIUM" if score >= 40 else "LOW"
+    return float(case.urgency_score)
+
+
+def refresh_case_urgency(case: ClinicalCase, db: Session) -> None:
+    prediction_rows = db.query(PredictionResult).filter(PredictionResult.case_id == case.id).all()
+    calculate_case_urgency(case, prediction_rows)
+
+
+def claim_case_for_veterinarian(case_id: int, veterinarian_id: int, db: Session) -> ClinicalCase:
+    case = db.get(ClinicalCase, case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    if case.veterinarian_id is not None and case.veterinarian_id != veterinarian_id:
+        raise HTTPException(status_code=409, detail="This case has already been claimed by another veterinarian.")
+    if case.status in {"completed", "reviewed"}:
+        raise HTTPException(status_code=409, detail="This case has already been completed.")
+    if case.veterinarian_id == veterinarian_id and case.status == "in_progress":
+        return case
+
+    updated = db.execute(
+        text("UPDATE clinical_cases SET veterinarian_id = :veterinarian_id, status = 'in_progress', claimed_at = :claimed_at WHERE id = :case_id AND veterinarian_id IS NULL AND status NOT IN ('completed', 'reviewed')"),
+        {"veterinarian_id": veterinarian_id, "claimed_at": datetime.utcnow(), "case_id": case_id},
+    )
+    if updated.rowcount == 0:
+        refreshed = db.get(ClinicalCase, case_id)
+        if refreshed and refreshed.veterinarian_id is not None and refreshed.veterinarian_id != veterinarian_id:
+            raise HTTPException(status_code=409, detail="Another veterinarian already claimed this case.")
+        raise HTTPException(status_code=409, detail="This case is no longer available for acceptance.")
+    db.commit()
+    db.refresh(case)
+    case.veterinarian_id = veterinarian_id
+    case.status = "in_progress"
+    case.claimed_at = datetime.utcnow()
+    return case
 
 
 @router.post("/triage", response_model=CaseRead, status_code=status.HTTP_201_CREATED)
@@ -47,14 +138,28 @@ def create_triage(payload: CaseCreate, db: Session = Depends(get_db), current_us
             raise HTTPException(status_code=403, detail="That cattle record does not belong to you.")
         cattle_id = cattle.id
     assessment = prediction_service.assess(payload.symptoms, payload.temperature_c) if payload.symptoms else None
-    case = ClinicalCase(owner_id=current_user.id, cattle_id=cattle_id, cattle_tag=payload.cattle_tag, breed=payload.breed, age_years=payload.age_years, temperature_c=payload.temperature_c, symptoms=json.dumps(payload.symptoms), ai_prediction=assessment.label if assessment else "No symptom triage submitted", risk_level=assessment.risk_level if assessment else "low")
+    case = ClinicalCase(
+        owner_id=current_user.id,
+        cattle_id=cattle_id,
+        cattle_tag=payload.cattle_tag,
+        breed=payload.breed,
+        age_years=payload.age_years,
+        temperature_c=payload.temperature_c,
+        symptoms=json.dumps(payload.symptoms),
+        ai_prediction=assessment.label if assessment else "No symptom triage submitted",
+        risk_level=assessment.risk_level if assessment else "low",
+        status="pending_review",
+    )
+    case.urgency_score = calculate_case_urgency(case)
+    case.urgency_level = case.urgency_level or "LOW"
     db.add(case)
     db.commit()
     db.refresh(case)
+    create_case_status_notification(case, db, "case_submitted", "doctor", {"case_id": case.id, "status": case.status, "risk_level": case.risk_level, "urgency_level": case.urgency_level})
     if case.risk_level.lower() == "high":
         create_high_risk_notification(case, db)
-        db.commit()
-    return serialize(case)
+    db.commit()
+    return serialize(case, current_user)
 
 
 @router.get("", response_model=list[CaseRead])
@@ -62,14 +167,42 @@ def list_cases(db: Session = Depends(get_db), current_user: User = Depends(get_c
     query = db.query(ClinicalCase)
     if current_user.role == "farmer":
         query = query.filter(ClinicalCase.owner_id == current_user.id)
-    return [serialize(case) for case in query.order_by(ClinicalCase.created_at.desc()).all()]
+    cases = query.all()
+    for case in cases:
+        refresh_case_urgency(case, db)
+    if cases:
+        db.commit()
+    if current_user.role == "doctor":
+        priority = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+        cases.sort(key=lambda item: (priority.get((item.urgency_level or "LOW").upper(), 99), item.created_at))
+    else:
+        cases.sort(key=lambda item: item.created_at, reverse=True)
+    return [serialize(case, current_user) for case in cases]
 
 
 @router.get("/{case_id}", response_model=CaseRead)
 def get_case(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     case = get_case_or_404(case_id, db)
     ensure_case_access(case, current_user)
-    return serialize(case)
+    refresh_case_urgency(case, db)
+    db.commit()
+    return serialize(case, current_user)
+
+
+@router.post("/{case_id}/accept", response_model=CaseRead)
+def accept_case(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles("doctor"))):
+    case = get_case_or_404(case_id, db)
+    if case.veterinarian_id is not None and case.veterinarian_id != current_user.id:
+        raise HTTPException(status_code=409, detail="This case is already assigned to another veterinarian.")
+    case = claim_case_for_veterinarian(case_id, current_user.id, db)
+    create_case_status_notification(case, db, "veterinarian_reviewing_case", "doctor", {"case_id": case.id, "status": case.status, "veterinarian_id": case.veterinarian_id})
+    db.commit()
+    return serialize(case, current_user)
+
+
+@router.post("/{case_id}/accept-review")
+def accept_case_review(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles("doctor"))):
+    return accept_case(case_id, db=db, current_user=current_user)
 
 
 @router.get("/{case_id}/report")
@@ -106,7 +239,6 @@ def get_case_predictions(case_id: int, db: Session = Depends(get_db), current_us
     case = get_case_or_404(case_id, db)
     ensure_case_access(case, current_user)
     rows = db.query(PredictionResult).filter(PredictionResult.case_id == case_id).order_by(PredictionResult.model_name, PredictionResult.rank).all()
-    # Group by model_name, keeping each model strictly separate
     groups: dict = {}
     for row in rows:
         if row.model_name not in groups:
@@ -119,8 +251,43 @@ def get_case_predictions(case_id: int, db: Session = Depends(get_db), current_us
 @router.put("/{case_id}/review", response_model=CaseRead)
 def review_case(case_id: int, payload: CaseReview, db: Session = Depends(get_db), current_user: User = Depends(require_roles("doctor"))):
     case = get_case_or_404(case_id, db)
-    case.veterinarian_notes = payload.veterinarian_notes
-    case.status = "pending_review" if payload.review_status == "pending" else payload.review_status
+    if case.veterinarian_id is not None and case.veterinarian_id != current_user.id:
+        raise HTTPException(status_code=403, detail="This case is assigned to another veterinarian.")
+    if payload.farmer_advice is None and payload.veterinarian_notes is None and payload.private_clinical_notes is None:
+        raise HTTPException(status_code=400, detail="Please provide farmer-facing advice or clinical notes before submitting.")
+
+    if payload.farmer_advice is not None:
+        case.farmer_advice = payload.farmer_advice.strip()
+    elif case.farmer_advice is None and payload.veterinarian_notes is not None:
+        case.farmer_advice = payload.veterinarian_notes.strip()
+
+    private_notes = payload.private_clinical_notes or payload.veterinarian_notes
+    if private_notes is not None:
+        case.private_clinical_notes = private_notes.strip()
+    case.veterinarian_notes = private_notes.strip() if private_notes else case.veterinarian_notes
+
+    case.veterinarian_id = case.veterinarian_id or current_user.id
+    case.claimed_at = case.claimed_at or datetime.utcnow()
+    if payload.review_status in {"completed", "reviewed"}:
+        if not case.farmer_advice:
+            raise HTTPException(status_code=400, detail="Farmer-facing advice is required before completing the case.")
+        case.status = "reviewed"
+        case.completed_at = datetime.utcnow()
+    elif payload.review_status == "in_progress":
+        case.status = "in_progress"
+        case.completed_at = None
+    else:
+        case.status = "pending_review"
+        case.completed_at = None
+
+    if case.farmer_advice:
+        case.urgency_score = calculate_case_urgency(case)
+        case.urgency_level = case.urgency_level or "LOW"
+
     db.commit()
     db.refresh(case)
-    return serialize(case)
+
+    if case.status == "reviewed":
+        create_case_status_notification(case, db, "veterinary_advice_received", "farmer", {"case_id": case.id, "status": case.status, "farmer_advice": case.farmer_advice[:200]})
+    db.commit()
+    return serialize(case, current_user)

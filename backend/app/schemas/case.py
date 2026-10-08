@@ -23,11 +23,19 @@ class CaseRead(BaseModel):
     ai_prediction: str
     risk_level: str
     status: str
+    workflow_status: str | None = None
+    urgency_score: float | None = None
+    urgency_level: str | None = None
+    veterinarian_id: int | None = None
     veterinarian_notes: str | None = None
+    private_clinical_notes: str | None = None
+    farmer_advice: str | None = None
     created_at: datetime
     model_config = {"from_attributes": True}
 
 
 class CaseReview(BaseModel):
-    veterinarian_notes: str = Field(min_length=1, max_length=3000)
-    review_status: Literal["pending", "pending_review", "reviewed"] = "reviewed"
+    veterinarian_notes: str | None = Field(default=None, max_length=3000)
+    private_clinical_notes: str | None = Field(default=None, max_length=3000)
+    farmer_advice: str | None = Field(default=None, min_length=1, max_length=3000)
+    review_status: Literal["pending", "pending_review", "reviewed", "in_progress", "completed"] = "reviewed"

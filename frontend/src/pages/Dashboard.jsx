@@ -53,10 +53,14 @@ export default function Dashboard() {
                 <div className="min-w-0">
                   <p className="truncate text-lg font-semibold text-slate-900">{item.cattle_tag}</p>
                   <p className="mt-1 truncate text-base text-slate-600">{farmerDiseaseLabel(item.ai_prediction, language)}</p>
+                  <p className="mt-1 text-xs text-slate-500">Status: {String(item.workflow_status || item.status || 'PENDING').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())}</p>
                 </div>
-                <span className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-bold ${item.risk_level === 'high' ? 'bg-red-100 text-red-800' : item.risk_level === 'moderate' || item.risk_level === 'medium' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>
-                  {farmerRiskLabel(item.risk_level, language)}
-                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-bold ${item.risk_level === 'high' ? 'bg-red-100 text-red-800' : item.risk_level === 'moderate' || item.risk_level === 'medium' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>
+                    {farmerRiskLabel(item.risk_level, language)}
+                  </span>
+                  {item.urgency_level && <span className="text-xs font-semibold uppercase text-slate-600">{item.urgency_level}</span>}
+                </div>
               </Link>
             ))}
           </div>

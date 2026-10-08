@@ -82,7 +82,7 @@ export default function DiagnosisResult() {
     Promise.all([api.get(`/cases/${caseId}`), api.get(`/cases/${caseId}/predictions`)])
       .then(([caseResponse, predictionResponse]) => {
         if (!active) return
-        setResult(current => current || caseResponse.data)
+        setResult(current => ({ ...current, ...caseResponse.data }))
         setApiModels(predictionResponse.data.models || [])
       })
       .catch(() => { if (active) setError('तपासणीची माहिती मिळवता आली नाही.') })
@@ -104,6 +104,9 @@ export default function DiagnosisResult() {
 
   const groups = predictionGroups(location.state, apiModels, language)
   const risk = farmerRiskLabel(result?.risk_level, language)
+  const urgencyScore = typeof result?.urgency_score === 'number' && Number.isFinite(result.urgency_score)
+    ? String(Number(result.urgency_score.toFixed(2)))
+    : null
   const symptoms = Array.isArray(result?.symptoms) ? result.symptoms : []
   const reportDate = result?.created_at ? new Date(result.created_at).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-GB') : ''
 
@@ -117,6 +120,10 @@ export default function DiagnosisResult() {
         <p className="text-sm font-semibold text-emerald-800">{result?.cattle_tag ? `${translate('Tag number', 'टॅग क्रमांक')}: ${result.cattle_tag}` : 'BoviCare AI'}</p>
         <h1 className="mt-3 text-3xl font-bold text-emerald-950 sm:text-4xl">{translate('Diagnosis Result', 'तपासणीचा निकाल')}</h1>
         {reportDate && <p className="mt-2 text-base text-slate-600">{translate('Date', 'तारीख')}: {reportDate}</p>}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">{String(result?.workflow_status || result?.status || 'PENDING').replace(/_/g, ' ')}</span>
+          {result?.urgency_level && <span className="rounded-md bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-800">{result.urgency_level}</span>}
+        </div>
 
         <div className="mt-8 border-t border-slate-200 pt-7">
           {groups.length ? groups.map((group, index) => <ResultsGroup key={`${group.title}-${index}`} group={group} language={language} />) : (
@@ -134,12 +141,33 @@ export default function DiagnosisResult() {
           </span>
         </div>
 
+        <section className="mt-7 rounded-md border border-slate-200 bg-slate-50 p-5" aria-label={translate('Urgency priority', 'तातडीचे प्राधान्य')}>
+          <h2 className="text-base font-bold text-slate-900">{translate('Urgency Priority', 'तातडीचे प्राधान्य')}</h2>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-600">{translate('Urgency Priority', 'तातडीचे प्राधान्य')}</p>
+              <p className="mt-1 text-2xl font-bold text-emerald-800">{result?.urgency_level ? String(result.urgency_level).toUpperCase() : translate('Not available', 'उपलब्ध नाही')}</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-600">{translate('Urgency Score', 'तातडीचा गुण')}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{urgencyScore === null ? translate('Not available', 'उपलब्ध नाही') : `${urgencyScore} / 100`}</p>
+            </div>
+          </div>
+        </section>
+
         <div className="mt-7">
           <p className="text-base font-semibold text-slate-600">{translate('Reported Symptoms', 'नोंदवलेली लक्षणे')}</p>
           <p className="mt-2 text-lg leading-relaxed text-slate-900">
             {symptoms.length ? symptoms.map(item => farmerSymptomLabel(item, language)).join(', ') : translate('No symptoms reported', 'लक्षणे नोंदवलेली नाहीत')}
           </p>
         </div>
+
+        {result?.farmer_advice && (
+          <div className="mt-8 rounded-md bg-emerald-50 p-5">
+            <h2 className="text-xl font-bold text-emerald-950">{translate('Veterinary advice', 'पशुवैद्यकांचा सल्ला')}</h2>
+            <p className="mt-3 whitespace-pre-wrap text-lg leading-relaxed text-emerald-950">{result.farmer_advice}</p>
+          </div>
+        )}
 
         <div className="mt-8 rounded-md bg-emerald-50 p-5">
           <h2 className="text-xl font-bold text-emerald-950">{translate('What should you do?', 'काय करावे?')}</h2>

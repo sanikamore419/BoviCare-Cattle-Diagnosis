@@ -4,6 +4,13 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { Badge, Card, ErrorAlert, LoadingState } from '../components/ui'
 import { api } from '../lib/api'
 
+function workflowLabel(status) {
+  const value = String(status || '').toLowerCase()
+  if (value.includes('progress')) return 'IN_PROGRESS'
+  if (value.includes('complete') || value.includes('reviewed')) return 'COMPLETED'
+  return 'PENDING'
+}
+
 // Authoritative persisted model identifiers. Each model is displayed separately.
 const MODEL_NAMES = {
   general: 'general_cattle_disease',
@@ -97,7 +104,8 @@ export default function VeterinaryCaseDetails() {
   const location = useLocation()
   const [item, setItem] = useState(location.state?.result)
   const [message, setMessage] = useState('')
-  const [notes, setNotes] = useState(location.state?.result?.veterinarian_notes || '')
+  const [notes, setNotes] = useState(location.state?.result?.private_clinical_notes || location.state?.result?.veterinarian_notes || '')
+  const [farmerAdvice, setFarmerAdvice] = useState(location.state?.result?.farmer_advice || '')
   const [reviewStatus, setReviewStatus] = useState(location.state?.result?.status || 'pending_review')
   const [error, setError] = useState('')
   const [predictionModels, setPredictionModels] = useState([])
@@ -152,18 +160,36 @@ export default function VeterinaryCaseDetails() {
 
   // Prefill the doctor notes textarea with previously saved veterinarian notes.
   useEffect(() => {
-    if (item?.veterinarian_notes) setNotes(current => current || item.veterinarian_notes)
+    if (item?.private_clinical_notes || item?.veterinarian_notes) setNotes(current => current || (item.private_clinical_notes || item.veterinarian_notes || ''))
+    if (item?.farmer_advice) setFarmerAdvice(current => current || item.farmer_advice)
   }, [item])
 
   if (error) return <ErrorAlert>{error}</ErrorAlert>
   if (!item) return <LoadingState label="Loading clinical case…" />
 
-  async function review() {
-    if (!notes.trim()) { setMessage('Add doctor notes before marking a case as reviewed.'); return }
+  async function accept() {
     try {
-      const response = await api.put(`/cases/${item.id}/review`, { veterinarian_notes: notes, review_status: reviewStatus })
+      setMessage('')
+      const response = await api.post(`/cases/${item.id}/accept`)
       setItem(response.data)
-      setMessage('Doctor notes saved and case marked as reviewed.')
+      setReviewStatus(response.data.status)
+      setMessage('Case accepted and moved into active review.')
+    } catch (requestError) {
+      setMessage(requestError.response?.data?.detail || 'This case is no longer available for acceptance.')
+    }
+  }
+
+  async function review() {
+    if (!farmerAdvice.trim()) { setMessage('Add farmer-facing advice before submitting the review.'); return }
+    try {
+      const response = await api.put(`/cases/${item.id}/review`, {
+        farmer_advice: farmerAdvice,
+        private_clinical_notes: notes,
+        veterinarian_notes: notes,
+        review_status: reviewStatus,
+      })
+      setItem(response.data)
+      setMessage('Veterinary advice saved and the case status was updated.')
     } catch (requestError) {
       setMessage(requestError.response?.data?.detail || 'Could not save the clinical review.')
     }
@@ -175,6 +201,7 @@ export default function VeterinaryCaseDetails() {
   const cattleImageModel = predictionModels.find(m => m.model_name === MODEL_NAMES.cattleImage) || null
   const lumpyModel = predictionModels.find(m => m.model_name === MODEL_NAMES.lumpy) || null
   const hasAnyModel = Boolean(generalModel || mastitisModel || cattleImageModel || lumpyModel)
+  const waitingHours = Math.max(0, Math.round(((new Date() - new Date(item.created_at)) / 3600000)))
 
   return (
     <div>
@@ -189,8 +216,9 @@ export default function VeterinaryCaseDetails() {
       <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_.72fr]">
         <div className="grid gap-6 sm:grid-cols-2">
           <Info title="Cattle information" rows={[['Cattle ID', item.cattle_tag], ['Breed', item.breed || 'Not provided'], ['Age', item.age_years ?? 'Not provided'], ['Gender', context.gender || 'Not provided']]} />
-          <Info title="Farmer information" rows={[['Owner', 'Private farmer identity'], ['Submitted', new Date(item.created_at).toLocaleString()], ['Status', item.status.replaceAll('_', ' ')]]} />
-          <Info title="Clinical observations" rows={[['Symptoms', item.symptoms.join(', ')], ['Temperature', item.temperature_c ? `${item.temperature_c} °C` : 'Not provided'], ['Additional notes', context.notes || 'Not provided']]} />
+          <Info title="Farmer information" rows={[['Owner', 'Private farmer identity'], ['Submitted', new Date(item.created_at).toLocaleString()], ['Status', workflowLabel(item.workflow_status || item.status)]]} />
+          <Info title="Urgency" rows={[[`Urgency level`, (item.urgency_level || 'LOW').toUpperCase()], ['Urgency score', `${Math.round(item.urgency_score || 0)}/100`], ['Waiting time', `${waitingHours} hours`]]} />
+          <Info title="Clinical observations" rows={[['Symptoms', (item.symptoms || []).join(', ')], ['Temperature', item.temperature_c ? `${item.temperature_c} °C` : 'Not provided'], ['AI suggestion', item.ai_prediction || 'Not provided'], ['Additional notes', context.notes || 'Not provided']]} />
           <Card className="p-5">
             <h2 className="font-bold">Uploaded image</h2>
             {imageUrl
@@ -230,20 +258,20 @@ export default function VeterinaryCaseDetails() {
           <p className="eyebrow">Doctor review</p>
           <h2 className="mt-2 text-xl font-bold">Clinical decision</h2>
 
-          {item.veterinarian_notes && (
-            <div className="mt-5 rounded-xl bg-slate-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Saved veterinarian notes</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{item.veterinarian_notes}</p>
+          {item.farmer_advice && (
+            <div className="mt-5 rounded-xl bg-emerald-50 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Existing farmer-facing advice</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{item.farmer_advice}</p>
             </div>
           )}
 
-          <label className="mt-5 block"><span className="label">Confirm diagnosis</span><input className="input" placeholder="Enter after clinical examination" /></label>
-          <label className="mt-4 block"><span className="label">Review status</span><select value={reviewStatus} onChange={event => setReviewStatus(event.target.value)} className="input"><option value="pending_review">Pending review</option><option value="reviewed">Reviewed</option></select></label>
-          <label className="mt-4 block"><span className="label">Doctor notes</span><textarea value={notes} onChange={event => setNotes(event.target.value)} className="input resize-y" rows="3" placeholder="Clinical observations" /></label>
-          <label className="mt-4 block"><span className="label">Treatment / advice</span><textarea className="input resize-y" rows="3" placeholder="Guidance for the farmer" /></label>
-          <button onClick={review} className="button-primary mt-5 w-full"><Save size={17} />Mark Case as Reviewed</button>
+          <button onClick={accept} className="button-primary mt-5 w-full"><CheckCircle2 size={17} />Accept & Review</button>
+          <label className="mt-5 block"><span className="label">Review status</span><select value={reviewStatus} onChange={event => setReviewStatus(event.target.value)} className="input"><option value="in_progress">In progress</option><option value="reviewed">Completed</option></select></label>
+          <label className="mt-4 block"><span className="label">Farmer-facing advice</span><textarea value={farmerAdvice} onChange={event => setFarmerAdvice(event.target.value)} className="input resize-y" rows="4" placeholder="Guidance for the farmer" /></label>
+          <label className="mt-4 block"><span className="label">Private clinical notes</span><textarea value={notes} onChange={event => setNotes(event.target.value)} className="input resize-y" rows="4" placeholder="Internal clinical notes visible only to the veterinarian" /></label>
+          <button onClick={review} className="button-primary mt-5 w-full"><Save size={17} />Submit Advice</button>
           {message && <p className="mt-3 text-xs leading-5 text-amber-700">{message}</p>}
-          <div className="mt-6 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900"><CheckCircle2 className="mb-2" size={18} />Doctor notes and review status are securely saved. Use qualified clinical judgement before confirming a diagnosis or giving treatment advice.</div>
+          <div className="mt-6 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900"><CheckCircle2 className="mb-2" size={18} />Private notes remain internal; only farmer-facing advice is shown to the farmer.</div>
         </Card>
       </div>
     </div>
