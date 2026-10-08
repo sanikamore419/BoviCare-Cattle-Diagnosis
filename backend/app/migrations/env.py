@@ -30,6 +30,19 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    supplied_connection = config.attributes.get("connection")
+    if supplied_connection is not None:
+        sqlite = supplied_connection.dialect.name == "sqlite"
+        context.configure(
+            connection=supplied_connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            render_as_batch=sqlite,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
