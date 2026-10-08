@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 const browserGlobals = Object.fromEntries(
   [
     'Blob', 'Event', 'FileReader', 'FormData', 'Image', 'URL', 'alert', 'confirm',
-    'document', 'localStorage', 'navigator', 'setTimeout', 'clearTimeout', 'window',
+    'document', 'localStorage', 'sessionStorage', 'navigator', 'setTimeout', 'clearTimeout', 'window', 'console',
   ].map(name => [name, 'readonly']),
 )
 

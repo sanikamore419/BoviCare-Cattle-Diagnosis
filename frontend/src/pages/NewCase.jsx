@@ -13,6 +13,10 @@ const groups = [
   { en: 'Urgent signs', mr: 'तातडीची लक्षणे', items: ['cannot stand', 'seizure', 'severe bleeding'] },
 ]
 const EMPTY_MILK = { Milk_Temperature: '', Milk_pH: '', Milk_Conductivity: '', Somatic_Cell_Count: '', Milk_Yield: '', Clotting: '' }
+const DRAFT_KEY = 'bovicare_new_case_draft'
+function loadDraft() {
+  try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null') || {} } catch { return {} }
+}
 function Field({ label, children }) { return <label className="block"><span className="label">{label}</span>{children}</label> }
 
 function requestErrorMessage(error, translate) {
@@ -32,19 +36,22 @@ export default function NewCase() {
   const { language, translate } = useLanguage()
   const inputRef = useRef(null)
   const submitLock = useRef(false)
-  const [form, setForm] = useState({ cattle_tag: '', cattle_name: '', breed: '', gender: '', age_years: '', temperature_c: '', notes: '' })
-  const [symptoms, setSymptoms] = useState([])
+  const [form, setForm] = useState(() => loadDraft().form || { cattle_tag: '', cattle_name: '', breed: '', gender: '', age_years: '', temperature_c: '', notes: '' })
+  const [symptoms, setSymptoms] = useState(() => loadDraft().symptoms || [])
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [imageModel, setImageModel] = useState('cattle')
-  const [milkOpen, setMilkOpen] = useState(false)
-  const [milkForm, setMilkForm] = useState(EMPTY_MILK)
+  const [imageModel, setImageModel] = useState(() => loadDraft().imageModel || 'cattle')
+  const [milkOpen, setMilkOpen] = useState(() => loadDraft().milkOpen || false)
+  const [milkForm, setMilkForm] = useState(() => loadDraft().milkForm || EMPTY_MILK)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [cattleList, setCattleList] = useState([])
-  const [selectedCattleId, setSelectedCattleId] = useState('')
+  const [selectedCattleId, setSelectedCattleId] = useState(() => loadDraft().selectedCattleId || '')
 
   useEffect(() => { api.get('/cattle').then(r => setCattleList(r.data)).catch(() => {}) }, [])
+  useEffect(() => {
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ form, symptoms, imageModel, milkOpen, milkForm, selectedCattleId })) } catch { /* Draft persistence is best-effort. */ }
+  }, [form, symptoms, imageModel, milkOpen, milkForm, selectedCattleId])
 
   const update = e => setForm({ ...form, [e.target.name]: e.target.value })
   const updateMilk = e => setMilkForm({ ...milkForm, [e.target.name]: e.target.value })
@@ -156,6 +163,7 @@ export default function NewCase() {
         })
       }
 
+      sessionStorage.removeItem(DRAFT_KEY)
       navigate(`/diagnosis/${triageResult.id}`, {
         state: {
           result: triageResult,
