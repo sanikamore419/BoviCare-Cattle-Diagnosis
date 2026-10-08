@@ -7,6 +7,8 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     role: Literal["farmer", "doctor"] = "farmer"
+    registration_number: str | None = Field(default=None, max_length=100)
+    specialization: str | None = Field(default=None, max_length=160)
 
     @field_validator("password")
     @classmethod
@@ -20,7 +22,7 @@ class UserRead(BaseModel):
     id: int
     name: str
     email: EmailStr
-    role: Literal["farmer", "doctor"]
+    role: Literal["farmer", "doctor", "admin"]
 
 
 class LoginRequest(BaseModel):

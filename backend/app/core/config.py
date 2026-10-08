@@ -6,7 +6,9 @@ class Settings(BaseSettings):
     app_name: str = "BoviCare AI API"
     environment: str = "development"
     database_url: str = "sqlite:///./bovicare.db"
-    secret_key: str = "development-only-change-me"
+    secret_key: str = "development-only-change-me-please-change"
+    admin_email: str | None = None
+    admin_password: str | None = None
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
     refresh_cookie_name: str = "bovicare_refresh"
@@ -24,7 +26,9 @@ class Settings(BaseSettings):
 
     def validate_runtime_security(self) -> None:
         is_production = self.environment.lower() in {"production", "prod"}
-        if is_production and self.secret_key == "development-only-change-me":
+        if len(self.secret_key.encode("utf-8")) < 32:
+            raise RuntimeError("SECRET_KEY must be at least 32 bytes.")
+        if is_production and self.secret_key == "development-only-change-me-please-change":
             raise RuntimeError("SECRET_KEY must be changed before running in production.")
         if self.refresh_cookie_samesite.lower() not in {"lax", "strict", "none"}:
             raise RuntimeError("REFRESH_COOKIE_SAMESITE must be Lax, Strict, or None.")

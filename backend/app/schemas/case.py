@@ -38,4 +38,4 @@ class CaseReview(BaseModel):
     veterinarian_notes: str | None = Field(default=None, max_length=3000)
     private_clinical_notes: str | None = Field(default=None, max_length=3000)
     farmer_advice: str | None = Field(default=None, min_length=1, max_length=3000)
-    review_status: Literal["pending", "pending_review", "reviewed", "in_progress", "completed"] = "reviewed"
+    review_status: Literal["submitted", "ai_complete", "pending_review", "in_review", "completed", "pending", "reviewed", "in_progress"] = "completed"

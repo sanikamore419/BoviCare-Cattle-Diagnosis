@@ -64,7 +64,16 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Doctor accounts must be provisioned by an administrator.")
     if db.query(User).filter(User.email == payload.email.lower()).first():
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
-    user = User(full_name=payload.name, email=payload.email.lower(), password_hash=hash_password(payload.password), role=payload.role)
+    user = User(
+        full_name=payload.name,
+        email=payload.email.lower(),
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        registration_number=payload.registration_number if payload.role == "doctor" else None,
+        specialization=payload.specialization if payload.role == "doctor" else None,
+        verification_status="pending" if payload.role == "doctor" else None,
+        availability="offline" if payload.role == "doctor" else None,
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

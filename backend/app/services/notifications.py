@@ -58,9 +58,9 @@ def create_high_risk_notification(case: ClinicalCase, db, disease: str | None = 
 
 def get_case_workflow_status(case: ClinicalCase) -> str:
     status = (case.status or "").strip().lower()
-    if status in {"pending", "pending_review", "new", "submitted"}:
+    if status in {"pending", "pending_review", "new", "submitted", "ai_complete"}:
         return "PENDING"
-    if status in {"in_progress", "accepted", "claimed", "reviewing"}:
+    if status in {"in_progress", "in_review", "accepted", "claimed", "reviewing"}:
         return "IN_PROGRESS"
     if status in {"completed", "reviewed", "finished", "advice_received"}:
         return "COMPLETED"

@@ -205,7 +205,7 @@ def _farmer_report(case: ClinicalCase, db, language: str) -> bytes:
     return buffer.getvalue()
 
 
-def build_case_report(case: ClinicalCase, db, farmer_view: bool = False, language: str = "en") -> bytes:
+def build_case_report(case: ClinicalCase, db, farmer_view: bool = False, language: str = "en", *, user_id: int) -> bytes:
     """Generate a factual report from persisted case and prediction data."""
     if farmer_view:
         return _farmer_report(case, db, "mr" if language == "mr" else "en")
@@ -216,7 +216,7 @@ def build_case_report(case: ClinicalCase, db, farmer_view: bool = False, languag
     owner = db.get(User, case.owner_id)
     cattle = db.get(Cattle, case.cattle_id) if case.cattle_id else None
     rows = db.query(PredictionResult).filter(PredictionResult.case_id == case.id).order_by(PredictionResult.model_name, PredictionResult.rank).all()
-    notifications = db.query(NotificationLog).filter(NotificationLog.case_id == case.id).order_by(NotificationLog.created_at).all()
+    notifications = db.query(NotificationLog).filter(NotificationLog.case_id == case.id, NotificationLog.user_id == user_id).order_by(NotificationLog.created_at).all()
     grouped = {}
     for row in rows:
         grouped.setdefault(row.model_name, []).append(row)

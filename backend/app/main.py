@@ -1,12 +1,15 @@
-from datetime import datetime
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from alembic.config import Config
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
 
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.database.session import Base, SessionLocal, engine
+from app.database.session import SessionLocal, engine
 from app.models import CaseImage, Cattle, ClinicalCase, NotificationLog, PredictionResult, RefreshSession, User  # noqa: F401
 from app.routers import auth, cases, cattle, health, predictions
 
@@ -22,6 +25,8 @@ app.include_router(predictions.router, prefix="/api/v1")
 
 
 def ensure_demo_veterinarians() -> None:
+    if settings.environment.lower() != "development":
+        return
     db: Session = SessionLocal()
     try:
         current = db.query(User).filter(User.role == "doctor").count()
@@ -33,33 +38,44 @@ def ensure_demo_veterinarians() -> None:
         ]
         for name, email, password in demo_users:
             if not db.query(User).filter(User.email == email.lower()).first():
-                db.add(User(full_name=name, email=email.lower(), password_hash=hash_password(password), role="doctor"))
+                db.add(User(full_name=name, email=email.lower(), password_hash=hash_password(password), role="doctor", verification_status="approved", availability="offline"))
         db.commit()
     finally:
         db.close()
 
 
+def ensure_admin_account() -> None:
+    db: Session = SessionLocal()
+    try:
+        if db.query(User).filter(User.role == "admin").first():
+            return
+        is_production = settings.environment.lower() in {"production", "prod"}
+        if not settings.admin_email or not settings.admin_password:
+            if is_production:
+                raise RuntimeError("ADMIN_EMAIL and ADMIN_PASSWORD are required to seed the production administrator.")
+            return
+        email = settings.admin_email.lower().strip()
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            raise RuntimeError("The configured administrator email is already assigned to a non-admin account.")
+        db.add(User(full_name="BoviCare Administrator", email=email, password_hash=hash_password(settings.admin_password), role="admin"))
+        db.commit()
+    finally:
+        db.close()
+
+
+def verify_schema_revision() -> None:
+    migration_config = Config(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
+    head_revision = ScriptDirectory.from_config(migration_config).get_current_head()
+    with engine.connect() as connection:
+        current_revision = MigrationContext.configure(connection).get_current_revision()
+    if current_revision != head_revision:
+        raise RuntimeError("Database migrations are required before startup. Run 'python -m alembic upgrade head' from backend/.")
+
+
 @app.on_event("startup")
-def create_tables() -> None:
+def startup_checks() -> None:
     settings.validate_runtime_security()
-    Base.metadata.create_all(bind=engine)
+    verify_schema_revision()
     ensure_demo_veterinarians()
-    # Add cattle_id column to clinical_cases if it doesn't exist yet (SQLite migration)
-    if settings.database_url.startswith("sqlite"):
-        from sqlalchemy import text
-        with engine.connect() as conn:
-            cols = [row[1] for row in conn.execute(text("PRAGMA table_info(clinical_cases)"))]
-            if "cattle_id" not in cols:
-                conn.execute(text("ALTER TABLE clinical_cases ADD COLUMN cattle_id INTEGER REFERENCES cattle(id)"))
-                conn.commit()
-            for column_name in ["urgency_score", "urgency_level", "veterinarian_id", "claimed_at", "completed_at", "farmer_advice", "private_clinical_notes"]:
-                if column_name not in cols:
-                    if column_name in {"urgency_score"}:
-                        conn.execute(text(f"ALTER TABLE clinical_cases ADD COLUMN {column_name} FLOAT DEFAULT 0.0"))
-                    elif column_name in {"claimed_at", "completed_at"}:
-                        conn.execute(text(f"ALTER TABLE clinical_cases ADD COLUMN {column_name} DATETIME"))
-                    elif column_name in {"farmer_advice", "private_clinical_notes"}:
-                        conn.execute(text(f"ALTER TABLE clinical_cases ADD COLUMN {column_name} TEXT"))
-                    else:
-                        conn.execute(text(f"ALTER TABLE clinical_cases ADD COLUMN {column_name} VARCHAR(20)"))
-            conn.commit()
+    ensure_admin_account()

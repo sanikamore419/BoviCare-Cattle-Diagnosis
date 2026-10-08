@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import CaseImage, Cattle, ClinicalCase, NotificationLog, PredictionResult, User
+from app.models import CaseEvent, CaseImage, Cattle, ClinicalCase, NotificationLog, PredictionResult, User
+from app.models.status import CaseStatus
+from app.services.case_events import record_case_submitted, record_status_transition
 from app.schemas.case import CaseCreate, CaseRead, CaseReview
 from app.schemas.prediction import CaseModelResult, CasePredictionRow, CasePredictionsResponse
 from app.services.prediction import prediction_service
@@ -29,6 +31,7 @@ def serialize(case: ClinicalCase, current_user: User | None = None) -> dict:
     data["workflow_status"] = get_case_workflow_status(case)
     if current_user and current_user.role == "farmer":
         data["private_clinical_notes"] = None
+        data.pop("clinical_notes", None)
     data["farmer_advice"] = data.get("farmer_advice") or data.get("veterinarian_notes")
     return data
 
@@ -102,10 +105,11 @@ def refresh_case_urgency(case: ClinicalCase, db: Session) -> None:
 def claim_case_for_veterinarian(case_id: int, veterinarian_id: int, db: Session) -> ClinicalCase:
     claimed_at = datetime.utcnow()
     updated = db.execute(
-        text("UPDATE clinical_cases SET veterinarian_id = :veterinarian_id, status = 'in_progress', claimed_at = :claimed_at WHERE id = :case_id AND veterinarian_id IS NULL AND status = 'pending_review'"),
+        text("UPDATE clinical_cases SET veterinarian_id = :veterinarian_id, claimed_by = :veterinarian_id, status = 'in_review', claimed_at = :claimed_at WHERE id = :case_id AND claimed_by IS NULL AND status = 'pending_review'"),
         {"veterinarian_id": veterinarian_id, "claimed_at": claimed_at, "case_id": case_id},
     )
     if updated.rowcount == 1:
+        db.add(CaseEvent(case_id=case_id, event="status_changed", actor_id=veterinarian_id, meta={"from_status": CaseStatus.PENDING_REVIEW.value, "to_status": CaseStatus.IN_REVIEW.value}, created_at=claimed_at))
         db.commit()
         claimed_case = db.get(ClinicalCase, case_id)
         if claimed_case is None:
@@ -118,9 +122,9 @@ def claim_case_for_veterinarian(case_id: int, veterinarian_id: int, db: Session)
     case = db.get(ClinicalCase, case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="Case not found.")
-    if case.veterinarian_id == veterinarian_id and case.status == "in_progress":
+    if case.claimed_by == veterinarian_id and case.status == CaseStatus.IN_REVIEW.value:
         return case
-    if case.status in {"completed", "reviewed"}:
+    if case.status == CaseStatus.COMPLETED.value:
         raise HTTPException(status_code=409, detail="This case has already been completed.")
     if case.veterinarian_id is not None:
         raise HTTPException(status_code=409, detail="This case has already been claimed by another veterinarian.")
@@ -148,13 +152,14 @@ def create_triage(payload: CaseCreate, db: Session = Depends(get_db), current_us
         symptoms=json.dumps(payload.symptoms),
         ai_prediction=assessment.label if assessment else "No symptom triage submitted",
         risk_level=assessment.risk_level if assessment else "low",
-        status="pending_review",
+        status=CaseStatus.SUBMITTED.value,
     )
     case.urgency_score = calculate_case_urgency(case)
     case.urgency_level = case.urgency_level or "LOW"
     db.add(case)
     db.commit()
     db.refresh(case)
+    record_case_submitted(db, case, current_user.id)
     create_case_status_notification(case, db, "case_submitted", "doctor", {"case_id": case.id, "status": case.status, "risk_level": case.risk_level, "urgency_level": case.urgency_level})
     if case.risk_level.lower() == "high":
         create_high_risk_notification(case, db)
@@ -206,7 +211,7 @@ def accept_case_review(case_id: int, db: Session = Depends(get_db), current_user
 def download_report(case_id: int, language: Literal["en", "mr"] = Query(default="en"), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     case = get_case_or_404(case_id, db)
     ensure_case_access(case, current_user)
-    pdf = build_case_report(case, db, farmer_view=current_user.role == "farmer", language=language)
+    pdf = build_case_report(case, db, farmer_view=current_user.role == "farmer", language=language, user_id=current_user.id)
     return StreamingResponse(BytesIO(pdf), media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="bovicare-case-{case_id}.pdf"'})
 
 
@@ -227,7 +232,7 @@ def get_case_image(case_id: int, db: Session = Depends(get_db), current_user: Us
 def get_case_notifications(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     case = get_case_or_404(case_id, db)
     ensure_case_access(case, current_user)
-    logs = db.query(NotificationLog).filter(NotificationLog.case_id == case_id).order_by(NotificationLog.created_at.desc()).all()
+    logs = db.query(NotificationLog).filter(NotificationLog.case_id == case_id, NotificationLog.user_id == current_user.id).order_by(NotificationLog.created_at.desc()).all()
     return [{"id": log.id, "case_id": log.case_id, "notification_type": log.notification_type, "target_role": log.target_role, "status": log.status, "created_at": log.created_at} for log in logs]
 
 
@@ -261,21 +266,24 @@ def review_case(case_id: int, payload: CaseReview, db: Session = Depends(get_db)
     private_notes = payload.private_clinical_notes or payload.veterinarian_notes
     if private_notes is not None:
         case.private_clinical_notes = private_notes.strip()
+        case.clinical_notes = private_notes.strip()
     case.veterinarian_notes = private_notes.strip() if private_notes else case.veterinarian_notes
 
     case.veterinarian_id = case.veterinarian_id or current_user.id
+    case.claimed_by = case.claimed_by or current_user.id
     case.claimed_at = case.claimed_at or datetime.utcnow()
     if payload.review_status in {"completed", "reviewed"}:
         if not case.farmer_advice:
             raise HTTPException(status_code=400, detail="Farmer-facing advice is required before completing the case.")
-        case.status = "reviewed"
+        next_status = CaseStatus.COMPLETED.value
         case.completed_at = datetime.utcnow()
-    elif payload.review_status == "in_progress":
-        case.status = "in_progress"
+    elif payload.review_status in {"in_progress", "in_review"}:
+        next_status = CaseStatus.IN_REVIEW.value
         case.completed_at = None
     else:
-        case.status = "pending_review"
+        next_status = CaseStatus.PENDING_REVIEW.value
         case.completed_at = None
+    record_status_transition(db, case, next_status, current_user.id)
 
     if case.farmer_advice:
         case.urgency_score = calculate_case_urgency(case)
@@ -284,7 +292,7 @@ def review_case(case_id: int, payload: CaseReview, db: Session = Depends(get_db)
     db.commit()
     db.refresh(case)
 
-    if case.status == "reviewed":
+    if case.status == CaseStatus.COMPLETED.value:
         create_case_status_notification(case, db, "veterinary_advice_received", "farmer", {"case_id": case.id, "status": case.status, "farmer_advice": case.farmer_advice[:200]})
     db.commit()
     return serialize(case, current_user)

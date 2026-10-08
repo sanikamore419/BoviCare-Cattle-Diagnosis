@@ -8,6 +8,18 @@ The system combines symptom-based machine learning, milk-parameter analysis, and
 
 > **Important:** BoviCare AI provides AI-based decision support and preliminary predictions. It is not a replacement for professional veterinary diagnosis or treatment.
 
+## Backend database migrations
+
+From the `backend/` directory, apply database schema changes before starting the API:
+
+```powershell
+python -m alembic upgrade head
+```
+
+The API does not create or alter database tables at startup. Production deployments must apply migrations as a release step before starting application workers.
+
+For an existing pre-Alembic development database, first back it up and verify that it matches the `0001_baseline` schema. Stamp only that verified database with the baseline, then run `python -m alembic upgrade head`. Do not stamp an unknown or mismatched schema.
+
 ---
 
 ## Project Overview

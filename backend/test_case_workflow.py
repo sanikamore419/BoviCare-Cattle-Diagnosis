@@ -11,10 +11,13 @@ from fastapi import HTTPException
 
 from app.database.session import Base
 from app.models.case import ClinicalCase
+from app.models.case_event import CaseEvent
+from app.models.notification import NotificationLog
 from app.models.user import User
 from app.routers.cases import (
     calculate_case_urgency,
     claim_case_for_veterinarian,
+    get_case_notifications,
     get_case_workflow_status,
 )
 
@@ -79,8 +82,12 @@ class WorkflowTests(unittest.TestCase):
 
         claimed = claim_case_for_veterinarian(case.id, vet.id, self.db)
         self.assertEqual(claimed.veterinarian_id, vet.id)
-        self.assertEqual(claimed.status, "in_progress")
+        self.assertEqual(claimed.status, "in_review")
+        self.assertEqual(claimed.claimed_by, vet.id)
         self.assertIsNotNone(claimed.claimed_at)
+        event = self.db.query(CaseEvent).filter(CaseEvent.case_id == case.id).one()
+        self.assertEqual(event.event, "status_changed")
+        self.assertEqual(event.meta, {"from_status": "pending_review", "to_status": "in_review"})
 
     def test_two_claim_attempts_do_not_both_succeed(self):
         vet_1 = self._make_vet("vet1@example.com")
@@ -131,9 +138,29 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(conflicts), 1, msg=f"Expected the losing doctor to receive 409, got {results}")
         self.assertIn(winners[0][0], (vet_1.id, vet_2.id))
         self.assertEqual(winners[0][2], winners[0][0])
-        self.assertEqual(winners[0][3], "in_progress")
+        self.assertEqual(winners[0][3], "in_review")
         self.db.refresh(case)
         self.assertEqual(case.veterinarian_id, winners[0][0])
+
+    def test_case_notification_list_excludes_legacy_rows_without_user_id(self):
+        farmer = User(full_name="Farmer", email="farmer@example.com", password_hash="x", role="farmer")
+        doctor = self._make_vet("notification-vet@example.com")
+        self.db.add(farmer)
+        self.db.commit()
+        self.db.refresh(farmer)
+        case = ClinicalCase(owner_id=farmer.id, cattle_tag="COW-N", symptoms="[]", ai_prediction="Review", risk_level="low", status="pending_review")
+        self.db.add(case)
+        self.db.commit()
+        self.db.refresh(case)
+        self.db.add_all([
+            NotificationLog(case_id=case.id, notification_type="legacy_event", target_role="farmer", status="mock", event_payload="{}", user_id=None),
+            NotificationLog(case_id=case.id, notification_type="farmer_event", target_role="farmer", status="mock", event_payload="{}", user_id=farmer.id),
+            NotificationLog(case_id=case.id, notification_type="doctor_event", target_role="doctor", status="mock", event_payload="{}", user_id=doctor.id),
+        ])
+        self.db.commit()
+
+        response = get_case_notifications(case.id, self.db, farmer)
+        self.assertEqual([item["notification_type"] for item in response], ["farmer_event"])
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@ from typing import Optional
 from app.core.security import get_current_user
 from app.database import get_db
 from app.models import CaseImage, Cattle, ClinicalCase, PredictionResult, User
+from app.models.status import CaseStatus
+from app.services.case_events import record_status_transition
 from app.schemas.prediction import (
     ImagePredictionResponse, PredictionRequest, PredictionResponse
 )
@@ -108,6 +110,13 @@ def run_prediction(
         ))
 
     db.commit()
+    if case_id is not None:
+        case = db.get(ClinicalCase, case_id)
+        if case and case.status == CaseStatus.SUBMITTED.value:
+            record_status_transition(db, case, CaseStatus.AI_COMPLETE.value, current_user.id, event="ai_completed")
+        if case and case.status == CaseStatus.AI_COMPLETE.value:
+            record_status_transition(db, case, CaseStatus.PENDING_REVIEW.value, current_user.id)
+        db.commit()
     if case_id is not None and routed.combined_risk_level.lower() == "high":
         case = db.get(ClinicalCase, case_id)
         case.risk_level = "high"
@@ -237,6 +246,13 @@ async def run_image_prediction(
                 path.unlink()
         db.rollback()
         raise
+    if resolved_case_id is not None:
+        case = db.get(ClinicalCase, resolved_case_id)
+        if case and case.status == CaseStatus.SUBMITTED.value:
+            record_status_transition(db, case, CaseStatus.AI_COMPLETE.value, current_user.id, event="ai_completed")
+        if case and case.status == CaseStatus.AI_COMPLETE.value:
+            record_status_transition(db, case, CaseStatus.PENDING_REVIEW.value, current_user.id)
+        db.commit()
     if resolved_case_id is not None and result.risk_level.lower() == "high":
         case = db.get(ClinicalCase, resolved_case_id)
         case.risk_level = "high"
