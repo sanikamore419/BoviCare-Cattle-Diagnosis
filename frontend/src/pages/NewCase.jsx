@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, ImagePlus, LoaderCircle, Sparkles, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, ImagePlus, LoaderCircle, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, ErrorAlert } from '../components/ui'

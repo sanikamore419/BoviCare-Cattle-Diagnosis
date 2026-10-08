@@ -10,7 +10,7 @@ function NavBrand() { return <NavLink to="/" className="mb-8 flex items-center g
 
 export default function AppShell({ children }) {
   const [open, setOpen] = useState(false); const location = useLocation(); const { user, logout } = useAuth()
-  const { language, translate } = useLanguage()
+  const { translate } = useLanguage()
   const farmerLinks = [
     { to: '/dashboard', label: translate('Home', 'मुख्य पान'), icon: LayoutDashboard },
     { to: '/cattle', label: translate('My cattle', 'माझी जनावरे'), icon: Stethoscope },

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useState } from 'react'
 
 const LanguageContext = createContext(null)
 
@@ -15,9 +15,9 @@ export function LanguageProvider({ children }) {
   function setLanguage(nextLanguage) {
     const next = nextLanguage === 'mr' ? 'mr' : 'en'
     setLanguageState(next)
-    try { localStorage.setItem('bovicare_language', next) } catch {}
+    try { localStorage.setItem('bovicare_language', next) } catch { /* Preference storage is optional. */ }
   }
-  const translate = (english, marathi) => language === 'mr' ? marathi : english
+  const translate = useCallback((english, marathi) => language === 'mr' ? marathi : english, [language])
   return <LanguageContext.Provider value={{ language, setLanguage, translate }}>{children}</LanguageContext.Provider>
 }
 

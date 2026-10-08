@@ -100,31 +100,31 @@ def refresh_case_urgency(case: ClinicalCase, db: Session) -> None:
 
 
 def claim_case_for_veterinarian(case_id: int, veterinarian_id: int, db: Session) -> ClinicalCase:
+    claimed_at = datetime.utcnow()
+    updated = db.execute(
+        text("UPDATE clinical_cases SET veterinarian_id = :veterinarian_id, status = 'in_progress', claimed_at = :claimed_at WHERE id = :case_id AND veterinarian_id IS NULL AND status = 'pending_review'"),
+        {"veterinarian_id": veterinarian_id, "claimed_at": claimed_at, "case_id": case_id},
+    )
+    if updated.rowcount == 1:
+        db.commit()
+        claimed_case = db.get(ClinicalCase, case_id)
+        if claimed_case is None:
+            raise HTTPException(status_code=404, detail="Case not found.")
+        return claimed_case
+
+    # The conditional UPDATE is the claim operation. Only after it loses do we
+    # read the row to distinguish a duplicate owner's retry from a conflict.
+    db.rollback()
     case = db.get(ClinicalCase, case_id)
-    if not case:
+    if case is None:
         raise HTTPException(status_code=404, detail="Case not found.")
-    if case.veterinarian_id is not None and case.veterinarian_id != veterinarian_id:
-        raise HTTPException(status_code=409, detail="This case has already been claimed by another veterinarian.")
-    if case.status in {"completed", "reviewed"}:
-        raise HTTPException(status_code=409, detail="This case has already been completed.")
     if case.veterinarian_id == veterinarian_id and case.status == "in_progress":
         return case
-
-    updated = db.execute(
-        text("UPDATE clinical_cases SET veterinarian_id = :veterinarian_id, status = 'in_progress', claimed_at = :claimed_at WHERE id = :case_id AND veterinarian_id IS NULL AND status NOT IN ('completed', 'reviewed')"),
-        {"veterinarian_id": veterinarian_id, "claimed_at": datetime.utcnow(), "case_id": case_id},
-    )
-    if updated.rowcount == 0:
-        refreshed = db.get(ClinicalCase, case_id)
-        if refreshed and refreshed.veterinarian_id is not None and refreshed.veterinarian_id != veterinarian_id:
-            raise HTTPException(status_code=409, detail="Another veterinarian already claimed this case.")
-        raise HTTPException(status_code=409, detail="This case is no longer available for acceptance.")
-    db.commit()
-    db.refresh(case)
-    case.veterinarian_id = veterinarian_id
-    case.status = "in_progress"
-    case.claimed_at = datetime.utcnow()
-    return case
+    if case.status in {"completed", "reviewed"}:
+        raise HTTPException(status_code=409, detail="This case has already been completed.")
+    if case.veterinarian_id is not None:
+        raise HTTPException(status_code=409, detail="This case has already been claimed by another veterinarian.")
+    raise HTTPException(status_code=409, detail="This case is no longer available for acceptance.")
 
 
 @router.post("/triage", response_model=CaseRead, status_code=status.HTTP_201_CREATED)
@@ -191,9 +191,6 @@ def get_case(case_id: int, db: Session = Depends(get_db), current_user: User = D
 
 @router.post("/{case_id}/accept", response_model=CaseRead)
 def accept_case(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_roles("doctor"))):
-    case = get_case_or_404(case_id, db)
-    if case.veterinarian_id is not None and case.veterinarian_id != current_user.id:
-        raise HTTPException(status_code=409, detail="This case is already assigned to another veterinarian.")
     case = claim_case_for_veterinarian(case_id, current_user.id, db)
     create_case_status_notification(case, db, "veterinarian_reviewing_case", "doctor", {"case_id": case.id, "status": case.status, "veterinarian_id": case.veterinarian_id})
     db.commit()

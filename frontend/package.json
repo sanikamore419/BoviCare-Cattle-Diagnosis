@@ -3,7 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "scripts": { "dev": "vite", "build": "vite build", "preview": "vite preview" },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint src --ext .js,.jsx",
+    "preview": "vite preview"
+  },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "axios": "latest",
@@ -13,5 +18,13 @@
     "react-router-dom": "latest",
     "recharts": "latest"
   },
-  "devDependencies": { "autoprefixer": "latest", "postcss": "latest", "tailwindcss": "^3.4.17", "vite": "latest" }
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "autoprefixer": "latest",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "postcss": "latest",
+    "tailwindcss": "^3.4.17",
+    "vite": "latest"
+  }
 }

@@ -21,7 +21,7 @@ export default function Dashboard() {
       })
       .catch(() => setError(translate('Could not load information. Please try again.', 'माहिती मिळवता आली नाही. कृपया पुन्हा प्रयत्न करा.')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [translate])
 
   return (
     <div className="mx-auto max-w-5xl">

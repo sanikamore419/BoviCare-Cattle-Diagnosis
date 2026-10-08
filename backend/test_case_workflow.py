@@ -1,4 +1,5 @@
 import os
+import queue
 import threading
 import tempfile
 import unittest
@@ -6,7 +7,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from fastapi import HTTPException
 
 from app.database.session import Base
 from app.models.case import ClinicalCase
@@ -23,7 +24,10 @@ class WorkflowTests(unittest.TestCase):
         fd, db_path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
         self.db_path = db_path
-        self.engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        self.engine = create_engine(
+            f"sqlite:///{db_path}",
+            connect_args={"check_same_thread": False, "timeout": 30},
+        )
         Base.metadata.create_all(self.engine)
         Session = sessionmaker(bind=self.engine)
         self.db = Session()
@@ -93,31 +97,43 @@ class WorkflowTests(unittest.TestCase):
         self.db.add(case)
         self.db.commit()
         self.db.refresh(case)
+        self.db.commit()
 
-        outcome = []
+        outcome = queue.Queue()
+        start = threading.Barrier(3)
         Session = sessionmaker(bind=self.engine)
 
         def try_claim(vet_id):
             local_db = Session()
             try:
+                start.wait(timeout=10)
                 result = claim_case_for_veterinarian(case.id, vet_id, local_db)
-                outcome.append((vet_id, result.veterinarian_id, result.status))
-            except Exception as exc:  # pragma: no cover - concurrency guard test path
-                outcome.append((vet_id, "error", str(exc)))
+                outcome.put((vet_id, "winner", result.veterinarian_id, result.status))
+            except HTTPException as exc:
+                outcome.put((vet_id, "conflict" if exc.status_code == 409 else "http_error", exc.status_code))
+            except Exception as exc:  # Capture unexpected worker errors for an actionable assertion.
+                outcome.put((vet_id, "error", repr(exc)))
             finally:
                 local_db.close()
 
         threads = [threading.Thread(target=try_claim, args=(vet_1.id,)), threading.Thread(target=try_claim, args=(vet_2.id,))]
         for thread in threads:
             thread.start()
+        start.wait(timeout=10)
         for thread in threads:
-            thread.join()
+            thread.join(timeout=15)
 
-        assigned = [entry for entry in outcome if entry[1] not in ("error",)]
-        self.assertEqual(len(assigned), 1)
-        self.assertIn(assigned[0][0], (vet_1.id, vet_2.id))
+        self.assertTrue(all(not thread.is_alive() for thread in threads), "claim workers did not finish")
+        results = [outcome.get_nowait() for _ in threads]
+        winners = [entry for entry in results if entry[1] == "winner"]
+        conflicts = [entry for entry in results if entry[1] == "conflict"]
+        self.assertEqual(len(winners), 1, msg=f"Expected one claim winner, got {results}")
+        self.assertEqual(len(conflicts), 1, msg=f"Expected the losing doctor to receive 409, got {results}")
+        self.assertIn(winners[0][0], (vet_1.id, vet_2.id))
+        self.assertEqual(winners[0][2], winners[0][0])
+        self.assertEqual(winners[0][3], "in_progress")
         self.db.refresh(case)
-        self.assertEqual(case.veterinarian_id, assigned[0][0])
+        self.assertEqual(case.veterinarian_id, winners[0][0])
 
 
 if __name__ == "__main__":

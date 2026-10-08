@@ -79,7 +79,7 @@ export default function CattleManagement() {
       .then(r => setCattle(r.data))
       .catch(() => setError(translate('Could not load cattle information. Please try again.', 'जनावरांची माहिती मिळवता आली नाही. कृपया पुन्हा प्रयत्न करा.')))
       .finally(() => setLoading(false))
-  }, [])
+  }, [translate])
 
   async function handleCreate(payload) {
     setSaving(true); setError('')

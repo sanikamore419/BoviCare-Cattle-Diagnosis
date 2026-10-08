@@ -44,7 +44,6 @@ export default function VeterinaryDashboard() {
   })
   const pending = cases.filter(item => formatWorkflowStatus(item.workflow_status || item.status) === 'PENDING').length
   const inProgress = cases.filter(item => formatWorkflowStatus(item.workflow_status || item.status) === 'IN_PROGRESS').length
-  const completed = cases.filter(item => formatWorkflowStatus(item.workflow_status || item.status) === 'COMPLETED').length
   const high = cases.filter(item => (item.urgency_level || 'LOW').toUpperCase() === 'HIGH').length
 
   async function download(id) {
