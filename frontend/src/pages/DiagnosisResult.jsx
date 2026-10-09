@@ -5,6 +5,7 @@ import { Card, ErrorAlert, LoadingState } from '../components/ui'
 import { api } from '../lib/api'
 import { farmerDiseaseLabel, farmerRiskLabel, farmerSymptomLabel } from '../lib/farmerText'
 import { downloadCaseReport } from '../lib/reports'
+import { formatIstDateTime } from '../lib/dateTime'
 import { useLanguage } from '../auth/LanguageContext'
 
 function predictionGroups(locationState, apiModels, language) {
@@ -117,7 +118,7 @@ export default function DiagnosisResult() {
     ? String(Number(result.urgency_score.toFixed(2)))
     : null
   const symptoms = Array.isArray(result?.symptoms) ? result.symptoms : []
-  const reportDate = result?.created_at ? new Date(result.created_at).toLocaleDateString(language === 'mr' ? 'mr-IN' : 'en-GB') : ''
+  const reportDate = result?.created_at ? formatIstDateTime(result.created_at) : ''
 
   return (
     <div className="mx-auto max-w-3xl">

@@ -2,8 +2,10 @@ import { Activity, AlertTriangle, BookOpen, CheckCircle2, ClipboardList, Clock3,
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { useLanguage } from '../auth/LanguageContext'
 import { Card, EmptyState, ErrorAlert, LoadingState } from '../components/ui'
 import { api } from '../lib/api'
+import { formatIstDateTime, getWaitHours, timestampMillis } from '../lib/dateTime'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 const RISK_COLORS = { high: '#dc2626', medium: '#d97706', low: '#16a34a' }
@@ -21,11 +23,6 @@ function formatRisk(value) {
   if (normalized.includes('high')) return 'high'
   if (normalized.includes('medium') || normalized.includes('moderate')) return 'medium'
   return 'low'
-}
-
-function getWaitHours(createdAt) {
-  if (!createdAt) return 0
-  return Math.max(0, Math.round((Date.now() - new Date(createdAt).getTime()) / 3600000))
 }
 
 function formatWaitTime(createdAt) {
@@ -102,10 +99,35 @@ function PageHeader({ eyebrow, title, subtitle, action }) {
   )
 }
 
+function CaseImagePreview({ caseId, translate }) {
+  const [imageUrl, setImageUrl] = useState('')
+
+  useEffect(() => {
+    let active = true
+    let objectUrl = ''
+    api.get(`/cases/${caseId}/image`, { responseType: 'blob' })
+      .then((response) => {
+        objectUrl = URL.createObjectURL(response.data)
+        if (active) setImageUrl(objectUrl)
+      })
+      .catch(() => { if (active) setImageUrl('') })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [caseId])
+
+  return imageUrl
+    ? <img className="mt-2 h-16 w-20 rounded-lg object-cover" src={imageUrl} alt={`${translate('Farmer-submitted image for case', 'किसान द्वारा भेजी गई केस की तस्वीर', 'शेतकऱ्याने पाठवलेले प्रकरणाचे छायाचित्र')} ${caseId}`} />
+    : null
+}
+
 export function CaseQueuePage() {
+  const { translate } = useLanguage()
   const [cases, setCases] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [refreshKey, setRefreshKey] = useState(0)
   const [query, setQuery] = useState('')
   const [risk, setRisk] = useState('all')
   const [status, setStatus] = useState('all')
@@ -117,15 +139,10 @@ export function CaseQueuePage() {
       .catch(() => { if (active) setError('We could not load the latest cases. Please try again.') })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [])
+  }, [refreshKey])
 
   const filteredCases = useMemo(() => {
-    return [...cases]
-      .sort((a, b) => {
-        const order = { high: 0, medium: 1, low: 2 }
-        return (order[formatRisk(a.risk_level)] ?? 99) - (order[formatRisk(b.risk_level)] ?? 99)
-      })
-      .filter((item) => {
+    return cases.filter((item) => {
         const matchesRisk = risk === 'all' || formatRisk(item.risk_level) === risk
         const itemStatus = formatStatus(item.workflow_status || item.status)
         const matchesStatus = status === 'all' || itemStatus === status
@@ -147,7 +164,11 @@ export function CaseQueuePage() {
         eyebrow="Priority inbox"
         title="Case queue"
         subtitle="Cases are sorted by urgency and waiting time."
-        action={<Link to="/cases" className="button-secondary">Refresh</Link>}
+        action={<button type="button" className="button-secondary" onClick={() => {
+          setError('')
+          setLoading(true)
+          setRefreshKey((key) => key + 1)
+        }}>Refresh</button>}
       />
 
       {error && <div className="mt-6"><ErrorAlert>{error}</ErrorAlert></div>}
@@ -204,13 +225,29 @@ export function CaseQueuePage() {
                   <tr key={item.id} className="align-top hover:bg-emerald-50/40">
                     <td className="px-5 py-4">
                       <Link to={`/cases/${item.id}`} state={{ result: item }} className="font-bold text-emerald-700">#{item.id}</Link>
-                      <p className="mt-1 text-xs text-slate-500">{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'New'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{formatIstDateTime(item.created_at)}</p>
+                      {item.farmer?.name && <p className="mt-1 text-xs text-slate-700">{item.farmer.name}</p>}
+                      {item.farmer?.email && <p className="mt-1 text-xs text-slate-500">{item.farmer.email}</p>}
+                      {item.has_image && <CaseImagePreview caseId={item.id} translate={translate} />}
                     </td>
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">{item.cattle_tag || 'Unknown cattle'}</p>
-                      <p className="mt-1 text-xs text-slate-500">{item.breed || 'Breed not provided'}</p>
+                      {item.cattle_tag && <p className="font-semibold text-slate-800">{item.cattle_tag}</p>}
+                      {item.cattle_name && <p className="mt-1 text-xs text-slate-700">{item.cattle_name}</p>}
+                      {item.breed && <p className="mt-1 text-xs text-slate-500">{item.breed}</p>}
+                      {item.gender && <p className="mt-1 text-xs text-slate-500">{item.gender}</p>}
+                      {item.age_years !== null && item.age_years !== undefined && <p className="mt-1 text-xs text-slate-500">{item.age_years} {translate('years', 'वर्ष', 'वर्षे')}</p>}
                     </td>
-                    <td className="px-5 py-4 text-slate-600 max-w-xs">{(item.symptoms || []).join(', ') || item.ai_prediction || 'No symptoms recorded'}</td>
+                    <td className="px-5 py-4 text-slate-600 max-w-xs">
+                      {item.symptoms?.length > 0 && <p>{item.symptoms.join(', ')}</p>}
+                      {item.temperature_c !== null && item.temperature_c !== undefined && <p className="mt-1 text-xs">{translate('Temperature', 'तापमान', 'तापमान')}: {item.temperature_c} °C</p>}
+                      {item.notes && <p className="mt-1 text-xs">{item.notes}</p>}
+                      {item.ai_prediction && item.ai_prediction !== 'No symptom triage submitted' && <p className="mt-1 text-xs">{item.ai_prediction}</p>}
+                      {item.prediction_results?.map((prediction) => (
+                        <p key={`${prediction.model_name}-${prediction.disease_label}`} className="mt-1 text-xs">
+                          {prediction.model_name}: {prediction.disease_label} ({(prediction.probability * 100).toFixed(1)}%)
+                        </p>
+                      ))}
+                    </td>
                     <td className="px-5 py-4"><RiskBadge value={item.risk_level} /></td>
                     <td className="px-5 py-4"><StatusBadge value={item.workflow_status || item.status} /></td>
                     <td className="px-5 py-4 text-slate-600">{formatWaitTime(item.created_at)}</td>
@@ -369,7 +406,7 @@ export function MyCasesPage() {
                     </td>
                     <td className="px-5 py-4"><RiskBadge value={item.risk_level} /></td>
                     <td className="px-5 py-4"><StatusBadge value={item.workflow_status || item.status} /></td>
-                    <td className="px-5 py-4 text-slate-600">{item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}</td>
+                    <td className="px-5 py-4 text-slate-600">{formatIstDateTime(item.updated_at)}</td>
                     <td className="px-5 py-4"><Link to={`/cases/${item.id}`} state={{ result: item }} className="button-secondary !min-h-9 !px-3 !py-2 text-xs">Open case</Link></td>
                   </tr>
                 ))}
@@ -411,7 +448,9 @@ export function ReviewedHistoryPage() {
     const matchesDisease = diseaseFilter === 'all' || (item.ai_prediction || '').toLowerCase().includes(diseaseFilter.toLowerCase())
     let matchesDate = true
     if (dateFilter !== 'all' && item.updated_at) {
-      const days = Math.max(0, Math.round((Date.now() - new Date(item.updated_at).getTime()) / 86400000))
+      const updatedAt = timestampMillis(item.updated_at)
+      if (updatedAt === null) return false
+      const days = Math.max(0, Math.round((Date.now() - updatedAt) / 86400000))
       if (dateFilter === '7') matchesDate = days <= 7
       if (dateFilter === '30') matchesDate = days <= 30
       if (dateFilter === 'today') matchesDate = days === 0
@@ -466,7 +505,7 @@ export function ReviewedHistoryPage() {
                     </td>
                     <td className="px-5 py-4 text-slate-600">{item.ai_prediction || 'Not available'}</td>
                     <td className="px-5 py-4"><RiskBadge value={item.risk_level} /></td>
-                    <td className="px-5 py-4 text-slate-600">{item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}</td>
+                    <td className="px-5 py-4 text-slate-600">{formatIstDateTime(item.updated_at)}</td>
                     <td className="px-5 py-4 text-slate-600">{item.veterinarian_name || 'Veterinary team'}</td>
                     <td className="px-5 py-4"><StatusBadge value={item.workflow_status || item.status} /></td>
                   </tr>
@@ -517,11 +556,14 @@ export function AnalyticsPage() {
   }, [cases])
 
   const averageReviewHours = useMemo(() => {
-    const completed = cases.filter((item) => item.updated_at && (formatStatus(item.workflow_status || item.status) === 'reviewed' || String(item.status || '').toLowerCase().includes('reviewed')))
+    const completed = cases.filter((item) => item.updated_at
+      && timestampMillis(item.created_at || item.updated_at) !== null
+      && timestampMillis(item.updated_at) !== null
+      && (formatStatus(item.workflow_status || item.status) === 'reviewed' || String(item.status || '').toLowerCase().includes('reviewed')))
     if (!completed.length) return 0
     const total = completed.reduce((sum, item) => {
-      const created = new Date(item.created_at || item.updated_at).getTime()
-      const updated = new Date(item.updated_at).getTime()
+      const created = timestampMillis(item.created_at || item.updated_at)
+      const updated = timestampMillis(item.updated_at)
       return sum + Math.max(0, (updated - created) / 3600000)
     }, 0)
     return total / completed.length

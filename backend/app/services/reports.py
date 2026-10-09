@@ -3,12 +3,14 @@ import os
 from io import BytesIO
 from decimal import Decimal
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
+from app.core.time import as_utc
 from app.models import Cattle, ClinicalCase, NotificationLog, PredictionResult, User
 
 
@@ -139,7 +141,8 @@ def _farmer_report(case: ClinicalCase, db, language: str) -> bytes:
 
     symptoms = json.loads(case.symptoms or "[]")
     symptom_text = ", ".join(_display_symptom(item, language) for item in symptoms) if symptoms else labels["no_symptoms"]
-    report_date = case.created_at.strftime("%d-%m-%Y") if case.created_at else ""
+    report_timestamp = as_utc(case.created_at)
+    report_date = report_timestamp.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y") if report_timestamp else ""
     y = 790
 
     def draw_line(text, size=11, bold=False, indent=0):

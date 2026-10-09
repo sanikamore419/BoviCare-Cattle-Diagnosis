@@ -110,10 +110,13 @@ export default function NewCase() {
         const r = await api.post('/cases/triage', {
           cattle_tag: form.cattle_tag,
           cattle_id: selectedCattleId ? Number(selectedCattleId) : null,
+          cattle_name: form.cattle_name || null,
           breed: form.breed || null,
+          gender: form.gender || null,
           age_years: form.age_years ? Number(form.age_years) : null,
           temperature_c: form.temperature_c ? Number(form.temperature_c) : null,
           symptoms,
+          notes: form.notes || null,
         })
         triageResult = r.data
       }

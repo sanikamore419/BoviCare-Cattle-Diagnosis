@@ -1,3 +1,4 @@
+import json
 import os
 import queue
 import threading
@@ -17,9 +18,11 @@ from app.models.user import User
 from app.routers.cases import (
     calculate_case_urgency,
     claim_case_for_veterinarian,
+    create_triage,
     get_case_notifications,
     get_case_workflow_status,
 )
+from app.schemas.case import CaseCreate
 
 
 class WorkflowTests(unittest.TestCase):
@@ -161,6 +164,38 @@ class WorkflowTests(unittest.TestCase):
 
         response = get_case_notifications(case.id, self.db, farmer)
         self.assertEqual([item["notification_type"] for item in response], ["farmer_event"])
+
+    def test_create_triage_preserves_farmer_submitted_fields_for_doctor_review(self):
+        farmer = User(full_name="Farmer", email="farmer2@example.com", password_hash="x", role="farmer")
+        self.db.add(farmer)
+        self.db.commit()
+        self.db.refresh(farmer)
+
+        payload = CaseCreate(
+            cattle_tag="COW-024",
+            cattle_name="Maya",
+            breed="Holstein",
+            gender="Female",
+            age_years=4.5,
+            temperature_c=39.7,
+            symptoms=["coughing", "nasal discharge"],
+            notes="Animal has been less active since Monday.",
+        )
+
+        case = create_triage(payload, db=self.db, current_user=farmer)
+        self.assertEqual(case.cattle_tag, "COW-024")
+        self.assertEqual(case.cattle_name, "Maya")
+        self.assertEqual(case.breed, "Holstein")
+        self.assertEqual(case.gender, "Female")
+        self.assertEqual(case.age_years, 4.5)
+        self.assertEqual(case.temperature_c, 39.7)
+        self.assertEqual(json.loads(case.symptoms), ["coughing", "nasal discharge"])
+        self.assertEqual(case.notes, "Animal has been less active since Monday.")
+        self.assertEqual(case.status, "submitted")
+
+        serialized = case
+        self.assertEqual(serialized.cattle_tag, "COW-024")
+        self.assertEqual(serialized.notes, "Animal has been less active since Monday.")
 
 
 if __name__ == "__main__":

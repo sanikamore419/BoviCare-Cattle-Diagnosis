@@ -2,6 +2,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
+from app.core.time import utcnow_naive
 
 
 class CaseEvent(Base):
@@ -13,4 +14,4 @@ class CaseEvent(Base):
     event: Mapped[str] = mapped_column(String(60), nullable=False)
     actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)

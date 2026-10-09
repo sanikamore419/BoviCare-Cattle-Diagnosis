@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { Badge, Card, ErrorAlert, LoadingState } from '../components/ui'
 import { api } from '../lib/api'
+import { formatIstDateTime, getWaitHours } from '../lib/dateTime'
 
 function workflowLabel(status) {
   const value = String(status || '').toLowerCase()
@@ -112,6 +113,7 @@ export default function VeterinaryCaseDetails() {
   const [predictionsLoading, setPredictionsLoading] = useState(true)
   const [predictionsError, setPredictionsError] = useState('')
   const [notifications, setNotifications] = useState([])
+  const [timeline, setTimeline] = useState([])
   const [imageUrl, setImageUrl] = useState('')
 
   // Load the case if it was not passed via router state.
@@ -158,6 +160,12 @@ export default function VeterinaryCaseDetails() {
     return undefined
   }, [caseId])
 
+  useEffect(() => {
+    if (!caseId) return undefined
+    api.get(`/cases/${caseId}/events`).then(response => setTimeline(response.data || [])).catch(() => setTimeline([]))
+    return undefined
+  }, [caseId])
+
   // Prefill the doctor notes textarea with previously saved veterinarian notes.
   useEffect(() => {
     if (item?.private_clinical_notes || item?.veterinarian_notes) setNotes(current => current || (item.private_clinical_notes || item.veterinarian_notes || ''))
@@ -201,7 +209,7 @@ export default function VeterinaryCaseDetails() {
   const cattleImageModel = predictionModels.find(m => m.model_name === MODEL_NAMES.cattleImage) || null
   const lumpyModel = predictionModels.find(m => m.model_name === MODEL_NAMES.lumpy) || null
   const hasAnyModel = Boolean(generalModel || mastitisModel || cattleImageModel || lumpyModel)
-  const waitingHours = Math.max(0, Math.round(((new Date() - new Date(item.created_at)) / 3600000)))
+  const waitingHours = getWaitHours(item.created_at)
 
   return (
     <div>
@@ -215,10 +223,25 @@ export default function VeterinaryCaseDetails() {
       </div>
       <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_.72fr]">
         <div className="grid gap-6 sm:grid-cols-2">
-          <Info title="Cattle information" rows={[['Cattle ID', item.cattle_tag], ['Breed', item.breed || 'Not provided'], ['Age', item.age_years ?? 'Not provided'], ['Gender', context.gender || 'Not provided']]} />
-          <Info title="Farmer information" rows={[['Owner', 'Private farmer identity'], ['Submitted', new Date(item.created_at).toLocaleString()], ['Status', workflowLabel(item.workflow_status || item.status)]]} />
-          <Info title="Urgency" rows={[[`Urgency level`, (item.urgency_level || 'LOW').toUpperCase()], ['Urgency score', `${Math.round(item.urgency_score || 0)}/100`], ['Waiting time', `${waitingHours} hours`]]} />
-          <Info title="Clinical observations" rows={[['Symptoms', (item.symptoms || []).join(', ')], ['Temperature', item.temperature_c ? `${item.temperature_c} °C` : 'Not provided'], ['AI suggestion', item.ai_prediction || 'Not provided'], ['Additional notes', context.notes || 'Not provided']]} />
+          <Info title="Farmer submitted information" rows={[
+            ['Cattle ID', item.cattle_tag || 'Not provided'],
+            ['Cattle name', item.cattle_name || context.cattleName || 'Not provided'],
+            ['Breed', item.breed || 'Not provided'],
+            ['Age', item.age_years ?? 'Not provided'],
+            ['Sex', item.gender || context.gender || 'Not provided'],
+            ['Temperature', item.temperature_c ? `${item.temperature_c} °C` : 'Not provided'],
+            ['Symptoms', (item.symptoms || []).join(', ') || 'Not provided'],
+            ['Farmer notes', item.notes || context.notes || 'Not provided'],
+            ['Submitted', formatIstDateTime(item.created_at)],
+          ]} />
+          <Info title="AI assessment" rows={[
+            ['AI suggestion', item.ai_prediction || 'Not provided'],
+            ['Risk level', item.risk_level || 'Not provided'],
+            ['Urgency level', (item.urgency_level || 'LOW').toUpperCase()],
+            ['Urgency score', `${Math.round(item.urgency_score || 0)}/100`],
+            ['Waiting time', `${waitingHours} hours`],
+            ['Status', workflowLabel(item.workflow_status || item.status)],
+          ]} />
           <Card className="p-5">
             <h2 className="font-bold">Uploaded image</h2>
             {imageUrl
@@ -227,6 +250,25 @@ export default function VeterinaryCaseDetails() {
           </Card>
 
           {notifications.length > 0 && <Card className="border-red-200 bg-red-50 p-5 sm:col-span-2"><h2 className="font-bold text-red-950">High-risk notification</h2><p className="mt-2 text-sm text-red-900">A doctor notification event was generated. Status: <strong>{notifications[0].status}</strong>.</p></Card>}
+
+          <Card className="p-5 sm:col-span-2">
+            <h2 className="font-bold">Case timeline</h2>
+            {timeline.length ? (
+              <ol className="mt-4 space-y-3">
+                {timeline.map(entry => (
+                  <li key={entry.id} className="border-l border-slate-200 pl-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-slate-800">{entry.title}</p>
+                      <span className="text-xs text-slate-500">{formatIstDateTime(entry.created_at)}</span>
+                    </div>
+                    {entry.detail && <p className="mt-1 text-sm text-slate-600">{entry.detail}</p>}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">No timeline events recorded for this case yet.</p>
+            )}
+          </Card>
 
           {/* Persisted AI predictions. Each model is shown independently. */}
           {predictionsLoading && <Card className="p-5 sm:col-span-2"><LoadingState label="Loading AI predictions…" /></Card>}
@@ -264,6 +306,11 @@ export default function VeterinaryCaseDetails() {
               <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{item.farmer_advice}</p>
             </div>
           )}
+
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Doctor review</p>
+            <p className="mt-1 text-sm text-slate-700">Use the farmer-submitted details above as the source-of-truth and add a clinician-facing recommendation below.</p>
+          </div>
 
           <button onClick={accept} className="button-primary mt-5 w-full"><CheckCircle2 size={17} />Accept & Review</button>
           <label className="mt-5 block"><span className="label">Review status</span><select value={reviewStatus} onChange={event => setReviewStatus(event.target.value)} className="input"><option value="in_progress">In progress</option><option value="reviewed">Completed</option></select></label>

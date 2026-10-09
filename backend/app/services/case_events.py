@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from app.core.time import utcnow_naive
 from app.models import CaseEvent, ClinicalCase
 
 
@@ -21,7 +22,7 @@ def record_status_transition(
         event=event,
         actor_id=actor_id,
         meta={"from_status": from_status, "to_status": to_status},
-        created_at=created_at or datetime.utcnow(),
+        created_at=created_at if created_at is not None else utcnow_naive(),
     ))
     return True
 
@@ -32,5 +33,5 @@ def record_case_submitted(db, case: ClinicalCase, actor_id: int) -> None:
         event="case_submitted",
         actor_id=actor_id,
         meta={"from_status": None, "to_status": case.status},
-        created_at=case.created_at or datetime.utcnow(),
+        created_at=case.created_at if case.created_at is not None else utcnow_naive(),
     ))

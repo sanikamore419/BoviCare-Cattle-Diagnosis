@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint src --ext .js,.jsx",
-    "test": "node --test src/config/imageClasses.test.js",
+    "test": "node --test src/config/imageClasses.test.js src/lib/dateTime.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

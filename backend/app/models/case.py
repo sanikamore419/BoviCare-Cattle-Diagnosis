@@ -3,6 +3,7 @@ from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.session import Base
 from app.models.status import CASE_STATUS_CHECK, CaseStatus
+from app.core.time import utcnow_naive
 
 
 class ClinicalCase(Base):
@@ -17,10 +18,13 @@ class ClinicalCase(Base):
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     cattle_id: Mapped[int | None] = mapped_column(ForeignKey("cattle.id"), nullable=True, index=True)
     cattle_tag: Mapped[str] = mapped_column(String(80), index=True)
+    cattle_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     breed: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
     age_years: Mapped[float | None] = mapped_column(Float, nullable=True)
     temperature_c: Mapped[float | None] = mapped_column(Float, nullable=True)
     symptoms: Mapped[str] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_prediction: Mapped[str] = mapped_column(String(255))
     risk_level: Mapped[str] = mapped_column(String(20), default="low")
     status: Mapped[str] = mapped_column(String(30), default=CaseStatus.SUBMITTED.value, server_default=text("'submitted'"))
@@ -35,4 +39,4 @@ class ClinicalCase(Base):
     clinical_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     veterinarian_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     private_clinical_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow_naive)

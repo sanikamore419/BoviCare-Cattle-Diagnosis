@@ -97,6 +97,28 @@ class MigrationTests(unittest.TestCase):
                 conn.execute(text("UPDATE clinical_cases SET status='in_progress' WHERE id=1"))
         engine.dispose()
 
+    def test_upgrade_adopts_unversioned_existing_schema(self):
+        self.migrate("0001_baseline")
+        self.seed_legacy_rows()
+        engine = self.open_engine()
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE refresh_sessions"))
+            conn.execute(text("DELETE FROM alembic_version"))
+        engine.dispose()
+
+        self.migrate("head")
+
+        engine = self.open_engine()
+        with engine.connect() as conn:
+            self.assertTrue(inspect(conn).has_table("refresh_sessions"))
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM users")).scalar_one(), 2)
+            self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM clinical_cases")).scalar_one(), 3)
+            self.assertEqual(
+                conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(),
+                "0005_case_submission_metadata",
+            )
+        engine.dispose()
+
     def test_upgrade_downgrade_upgrade_and_compatible_startup_created_events_table(self):
         self.migrate("0001_baseline")
         self.seed_legacy_rows()
@@ -125,7 +147,7 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM users")).scalar_one(), 2)
             self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM clinical_cases")).scalar_one(), 3)
             self.assertEqual(conn.execute(text("SELECT COUNT(*) FROM case_events")).scalar_one(), 3)
-            self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), "0004_notification_fields")
+            self.assertEqual(conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one(), "0005_case_submission_metadata")
         engine.dispose()
 
 
